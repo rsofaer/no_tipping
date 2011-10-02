@@ -44,36 +44,59 @@ template <int PivotL_, int PivotR_, int Size_>
 struct GenericBoard
 {
   enum { Size = Size_ };
+  enum { Positions = (2 * Size) + 1, };
   enum { PivotL = PivotL_ };
   enum { PivotR = PivotR_ };
   enum { Empty = 0, };
 
+  typedef Weight value_type;
+  typedef Weight& reference;
+  typedef const Weight& const_reference;
+  typedef Weight* iterator;
+  typedef const Weight* const_iterator;
+
   inline void SetPos(const int pos, const Weight w)
   {
-    assert(pos >= -size);
-    assert(pos <= size);
+    assert(pos >= -Size);
+    assert(pos <= Size);
     // rsofaer -- 20110929 -- Assert board not tipped.
     // reissb -- 20111002 -- This should go into an external function
     //   bool BoardTipped(const Board&).
     positions[pos + 10] = w;
   }
-
-  inline int GetPos(const int pos) const
+  inline Weight GetPos(const int pos) const
   {
     return positions[pos + 10];
   }
 
-  inline int& operator[](const int pos)
+  inline reference operator[](const int pos)
+  {
+    return positions[pos + 10];
+  }
+  inline const_reference operator[](const int pos) const
   {
     return positions[pos + 10];
   }
 
-  inline const int& operator[](const int pos) const
+  inline iterator begin()
   {
-    return positions[pos + 10];
+    return positions;
+  }
+  inline const_iterator begin() const
+  {
+    return positions;
   }
 
-  Weight positions[(2 * Size) + 1];
+  inline iterator end()
+  {
+    return positions + Positions;
+  }
+  inline const_iterator end() const
+  {
+    return positions + Positions;
+  }
+
+  Weight positions[Positions];
 };
 
 /// <summary> Player consists of a hand of weights. </summary>
