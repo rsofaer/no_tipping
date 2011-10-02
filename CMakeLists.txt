@@ -5,7 +5,6 @@ project(no_tipping_game)
 file(GLOB HEADERS "*.h")
 
 set(SRCS
-    "brute_force_ntg.cpp")
+    "main.cpp")
 
-add_executable(brute_force_ntg ${SRCS} ${HEADERS})
-
+add_executable(ntg ${SRCS} ${HEADERS})
