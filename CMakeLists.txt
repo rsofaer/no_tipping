@@ -15,7 +15,6 @@ target_link_libraries(ntg libntg)
 project(libntgjni)
 find_package(JNI REQUIRED)
 set(SRCS
-    "combination.cpp"
     "libntgjni.cpp")
 include_directories(${JNI_INCLUDE_DIRS})
 add_library(libntgjni SHARED ${SRCS} ${HEADERS})
