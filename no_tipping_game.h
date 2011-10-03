@@ -15,21 +15,28 @@ namespace ntg
 {
 
 typedef int Weight;
-template <int PivotL_, int PivotR_, int Size_>
+// Default game parameters.
+namespace detail
+{
+enum { Board_Size = 10, };
+enum { Board_PivotL = -3, };
+enum { Board_PivotR = -1, };
+enum { Board_BoardWeight = 3, };
+enum { Player_NumWeights = 7, };
+template <int BoardWeight_, int PivotL_, int PivotR_, int Size_>
 struct GenericBoard;
 template <int NumWeights_>
 struct GenericPlayer;
+}
+typedef detail::GenericBoard<detail::Board_BoardWeight,
+                             detail::Board_PivotL,
+                             detail::Board_PivotR,
+                             detail::Board_Size> Board;
+typedef detail::GenericPlayer<detail::Player_NumWeights> Player;
 
-// Default game parameters.
-enum { DefaultWeightCount = 7, };
-enum { BoardSize = 10, };
-enum { BoardPivotL = -3, };
-enum { BoardPivotR = -1, };
-enum { BoardWeight = 3, };
-enum { BoardCofG = 0, };
-typedef GenericBoard<BoardPivotL, BoardPivotR, BoardSize> Board;
-typedef GenericPlayer<DefaultWeightCount> Player;
 
+namespace detail
+{
 
 /// <summary> A game board including played weights. </summary>
 /// <remarks>
@@ -40,13 +47,15 @@ typedef GenericPlayer<DefaultWeightCount> Player;
 ///     N, the allowable indices are -N <= n <= N.
 ///   </para>
 /// </remarks>
-template <int PivotL_, int PivotR_, int Size_>
+template <int BoardWeight_, int PivotL_, int PivotR_, int Size_>
 struct GenericBoard
 {
-  enum { Size = Size_ };
+  enum { BoardWeight = BoardWeight_, };
+  enum { PivotL = PivotL_, };
+  enum { PivotR = PivotR_, };
+  enum { Size = Size_, };
+  enum { CenterOfGravity = 0, };
   enum { Positions = (2 * Size) + 1, };
-  enum { PivotL = PivotL_ };
-  enum { PivotR = PivotR_ };
   enum { Empty = 0, };
 
   typedef Weight value_type;
@@ -62,20 +71,20 @@ struct GenericBoard
     // rsofaer -- 20110929 -- Assert board not tipped.
     // reissb -- 20111002 -- This should go into an external function
     //   bool BoardTipped(const Board&).
-    positions[pos + 10] = w;
+    positions[pos + Size] = w;
   }
   inline Weight GetPos(const int pos) const
   {
-    return positions[pos + 10];
+    return positions[pos + Size];
   }
 
   inline reference operator[](const int pos)
   {
-    return positions[pos + 10];
+    return positions[pos + Size];
   }
   inline const_reference operator[](const int pos) const
   {
-    return positions[pos + 10];
+    return positions[pos + Size];
   }
 
   inline iterator begin()
@@ -105,9 +114,18 @@ struct GenericPlayer
 {
   enum { Played = -1, };
   enum { NumWeights = NumWeights_, };
-  Weight hand[NumWeights_];
+  Weight hand[NumWeights];
   int remain;
 };
+
+template <typename BoardType>
+inline void ClearBoard(BoardType* board)
+{
+  assert(board);
+  memset(board->positions, BoardType::Empty, sizeof(board->positions));
+}
+
+}
 
 /// <summary> A game state. Consists of board and players. </summary>
 struct State
@@ -133,9 +151,16 @@ struct State
 };
 
 /// <summary> Get the current player from the state. </summary>
-inline const Player* GetCurrentPlayer(const State& state)
+inline Player* CurrentPlayer(State* state)
 {
-  return (state.turn == State::Turn_Red) ? &state.red : &state.blue;
+  assert(state);
+  return (state->turn == State::Turn_Red) ? &state->red : &state->blue;
+}
+/// <summary> Get the current player from the state. </summary>
+inline const Player* CurrentPlayer(const State* state)
+{
+  assert(state);
+  return (state->turn == State::Turn_Red) ? &state->red : &state->blue;
 }
 
 /// <summary> Initialize player to game defaults. </summary>
@@ -149,8 +174,7 @@ void InitPlayer(Player* player)
 /// <summary> Clear the game board. </summary>
 inline void ClearBoard(Board* board)
 {
-  assert(board);
-  memset(board->positions, Board::Empty, sizeof(board->positions));
+  detail::ClearBoard(board);
 }
 
 /// <summary> Initialize board to game defaults. </summary>
@@ -182,24 +206,20 @@ inline void InitState(State* state)
 /// </remarks>
 struct Ply
 {
-  Ply(const int target_, const Weight weight_)
-    : target(target_),
-      weight(weight_)
-  {}
-
-  int target;
-  Weight weight;
+  Ply(const int pos_, const int wIdx_) : pos(pos_), wIdx(wIdx_) {}
+  int pos;
+  int wIdx;
 };
 
 namespace detail
 {
 
 /// <summary> Compute torque at a pivot for a given board. </summary>
-template <int Pivot>
-int Torque(const Board& board)
+template <int Pivot, typename BoardType>
+int Torque(const BoardType& board)
 {
-  int torque = (Pivot - BoardCofG) * BoardWeight;
-  for (int pos = -Board::Size; pos <= Board::Size; ++pos)
+  int torque = (Pivot - BoardType::CenterOfGravity) * BoardType::BoardWeight;
+  for (int pos = -BoardType::Size; pos <= BoardType::Size; ++pos)
   {
     torque += board[pos] * (Pivot - pos);
   }
@@ -222,7 +242,7 @@ void ExpandState(const State& state, std::vector<Ply>* plys)
   const Board& board = state.board;
   const int torqueL = TorqueL(board);
   const int torqueR = TorqueR(board);
-  const Player* currentPlayer = GetCurrentPlayer(state);
+  const Player* currentPlayer = CurrentPlayer(&state);
   int startPos = -Board::Size;
   for (const int* w = currentPlayer->hand;
        w < (currentPlayer->hand + Player::NumWeights);
@@ -290,31 +310,34 @@ void ExpandState(const State& state, std::vector<Ply>* plys)
 template <typename PhaseOp>
 inline void PlyMutateState(const Ply& ply, State* state)
 {
+  Player* player = CurrentPlayer(state);
+  Weight* hand = player->hand;
   assert(state);
   if (PhaseOp()(State::Phase_Adding, state->phase))
   {
-    assert(Board::Empty == state->board[ply.target]);
+    assert(Board::Empty == state->board[ply.pos]);
+    assert(Player::Played != hand[ply.wIdx]);
     // Update the board.
-    state->board[ply.target] = ply.weight;
-    // Swap the active player.
-    {
-      State::Turn& turn = state->turn;
-      ++reinterpret_cast<int&>(turn);
-      reinterpret_cast<int&>(turn) %= State::Turn_Count;
-    }
+    state->board[ply.pos] = hand[ply.wIdx];
+    hand[ply.wIdx] = Player::Played;
+    --player->remain;
   }
   else
   {
-    assert(ply.weight == state->board[ply.target]);
+    assert(Board::Empty != state->board[ply.pos]);
+    assert(Player::Played == hand[ply.wIdx]);
     // Update the board.
-    state->board[ply.target] = Board::Empty;
-    // Swap the active player.
-    {
-      State::Turn& turn = state->turn;
-      ++reinterpret_cast<int&>(turn);
-      reinterpret_cast<int&>(turn) %= State::Turn_Count;
-    }
+    hand[ply.wIdx] = state->board[ply.pos];
+    state->board[ply.pos] = Board::Empty;
+    ++player->remain;
   }
+}
+
+template <typename BoardType>
+inline bool Tipped(const BoardType& board)
+{
+  return (Torque<BoardType::PivotL>(board) > 0) ||
+         (Torque<BoardType::PivotR>(board) < 0);
 }
 
 }
@@ -329,6 +352,11 @@ inline int TorqueL(const Board& board)
 inline int TorqueR(const Board& board)
 {
   return detail::Torque<Board::PivotR>(board);
+}
+
+inline bool Tipped(const Board& board)
+{
+  return (TorqueL(board) > 0) || (TorqueR(board) < 0);
 }
 
 /// <summary> Discover all non suicidal plys from a given state. </summary>
@@ -352,6 +380,12 @@ inline void SuicidalPlys(const State& state, std::vector<Ply>* plys)
 inline void DoPly(const Ply& ply, State* state)
 {
   detail::PlyMutateState<std::equal_to<State::Phase> >(ply, state);
+  // Swap the active player.
+  {
+    State::Turn& turn = state->turn;
+    ++reinterpret_cast<int&>(turn);
+    reinterpret_cast<int&>(turn) %= State::Turn_Count;
+  }
 }
 
 /// <summary> Revserse the ply and get the resulting state. </summary>
@@ -360,6 +394,12 @@ inline void DoPly(const Ply& ply, State* state)
 ///   </para>
 inline void UndoPly(const Ply& ply, State* state)
 {
+  // Swap the active player.
+  {
+    State::Turn& turn = state->turn;
+    ++reinterpret_cast<int&>(turn);
+    reinterpret_cast<int&>(turn) %= State::Turn_Count;
+  }
   detail::PlyMutateState<std::not_equal_to<State::Phase> >(ply, state);
 }
 

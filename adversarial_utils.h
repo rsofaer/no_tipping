@@ -234,6 +234,7 @@ struct BoardEvaluationInverseDepthWinStates
          ++cmbIdx)
     {
       cmbIter.Next(&m, &cmb);
+      assert(cmb[0] < cmb[1]);
       const BoardPosWeight& first = bpws[cmb[0]];
       if (redWinsBoardMap.count(first) > 0)
       {
@@ -249,20 +250,22 @@ struct BoardEvaluationInverseDepthWinStates
 
   BoardEvaluationInverseDepthWinStates()
     : blueWinsBoardMap(),
-      redWinsBoardMap()
+      redWinsBoardMap(),
+      bpws()
   {
     // Get states where blue wins.
     {
       StatePlysPair oneW;
       OneWeightFinalSet(&oneW);
       std::vector<Ply>& plys = oneW.second;
+      const Weight* hand = CurrentPlayer(&oneW.first)->hand;
       for (std::vector<Ply>::const_iterator ply = plys.begin();
            ply != plys.end();
            ++ply)
       {
-        assert(0 == blueWinsBoardMap.count(BoardPosWeight(ply->target,
-                                                          ply->weight)));
-        blueWinsBoardMap[BoardPosWeight(ply->target, ply->weight)] = true;
+        assert(0 == blueWinsBoardMap.count(BoardPosWeight(ply->pos,
+                                                          hand[ply->wIdx])));
+        blueWinsBoardMap[BoardPosWeight(ply->pos, hand[ply->wIdx])] = true;
       }
     }
     // Get states where red wins.
@@ -280,12 +283,13 @@ struct BoardEvaluationInverseDepthWinStates
         State& state = statePlys->first;
         const BoardPosWeight stateBPW = StateFirstBPW(state);
         // Find the BoardPosWeight for each ply.
+        const Weight* hand = CurrentPlayer(&state)->hand;
         const std::vector<Ply>& plys = statePlys->second;
         for (std::vector<Ply>::const_iterator ply = plys.begin();
              ply != plys.end();
              ++ply)
         {
-          const BoardPosWeight plyBPW(ply->target, ply->weight);
+          const BoardPosWeight plyBPW(ply->pos, hand[ply->wIdx]);
           assert(plyBPW.p != stateBPW.p);
           if (plyBPW.p < stateBPW.p)
           {
