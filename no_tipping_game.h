@@ -18,7 +18,7 @@ typedef int Weight;
 // Default game parameters.
 namespace detail
 {
-enum { Board_Size = 10, };
+enum { Board_Size = 15, };
 enum { Board_PivotL = -3, };
 enum { Board_PivotR = -1, };
 enum { Board_BoardWeight = 3, };
