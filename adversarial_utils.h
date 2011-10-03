@@ -271,7 +271,7 @@ struct BoardEvaluationInverseDepthWinStates
     // Get states where red wins.
     {
       std::vector<StatePlysPair> twoW;
-      const int numWinStates = TwoWeightFinalSet(&twoW);
+      TwoWeightFinalSet(&twoW);
       // Construct a map from a BoardPosWeight to all of the corresponding
       // BoardPosWeight that are in a winning state pair. Always address a pair
       // using the lowest position occupied.
@@ -312,13 +312,27 @@ struct BoardEvaluationInverseDepthWinStates
     }
   }
 
+  // TODO(reissb) -- 201111003 -- Note that this is ASSUMING the red player.
+  //   Need to make this parameterized for the actual player.
   /// <summary> Score a board. </summary>
   int operator()(const State& state)
   {
-    // Count red win states reachable.
+    // Count win states reachable.
     const int redWinStatesReachable = RedWinStatesReachable(state.board);
     const int blueWinStatesReachable = BlueWinStatesReachable(state.board);
-    return 0;
+    // Return score based on win states.
+    if ((1 == redWinStatesReachable) && (0 == blueWinStatesReachable))
+    {
+      return std::numeric_limits<int>::max();
+    }
+    else if ((0 == redWinStatesReachable) && (1 == blueWinStatesReachable))
+    {
+      return std::numeric_limits<int>::min();
+    }
+    else
+    {
+      return redWinStatesReachable - blueWinStatesReachable;
+    }
   }
 
   BoardPosMap blueWinsBoardMap;

@@ -7,6 +7,7 @@
 #include <functional>
 #include <iostream>
 #include <map>
+#include <limits>
 #include <assert.h>
 
 namespace hps
@@ -206,6 +207,10 @@ inline void InitState(State* state)
 /// </remarks>
 struct Ply
 {
+  Ply()
+    : pos(std::numeric_limits<int>::min()),
+      wIdx(std::numeric_limits<Weight>::min())
+  {}
   Ply(const int pos_, const int wIdx_) : pos(pos_), wIdx(wIdx_) {}
   int pos;
   int wIdx;
@@ -244,9 +249,10 @@ void ExpandState(const State& state, std::vector<Ply>* plys)
   const int torqueR = TorqueR(board);
   const Player* currentPlayer = CurrentPlayer(&state);
   int startPos = -Board::Size;
+  int wIdx = 0;
   for (const int* w = currentPlayer->hand;
        w < (currentPlayer->hand + Player::NumWeights);
-       ++w)
+       ++w, ++wIdx)
   {
     // Is weight already played?
     if (Player::Played == *w)
@@ -270,7 +276,7 @@ void ExpandState(const State& state, std::vector<Ply>* plys)
         }
         else
         {
-          plys->push_back(Ply(pos, *w));
+          plys->push_back(Ply(pos, wIdx));
         }
       }
     }
@@ -281,7 +287,7 @@ void ExpandState(const State& state, std::vector<Ply>* plys)
       {
         continue;
       }
-      plys->push_back(Ply(pos, *w));
+      plys->push_back(Ply(pos, wIdx));
     }
     // Compute for right pivot.
     {
@@ -300,7 +306,7 @@ void ExpandState(const State& state, std::vector<Ply>* plys)
         }
         else
         {
-          plys->push_back(Ply(pos, *w));
+          plys->push_back(Ply(pos, wIdx));
         }
       }
     }
