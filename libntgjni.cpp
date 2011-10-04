@@ -99,7 +99,7 @@ std::string CalculateMoveWrapper(std::string command)
     int weight = CurrentPlayer(&stateBuffer)->hand[ply.wIdx];
     std::stringstream ss;
     ss << position << " " << weight;
-    return ss.str();
+    return "yo!";
 }
 
 }
