@@ -16,73 +16,61 @@ namespace ntg
 
 void BuildState(std::string command,State& stateBuffer)
 {
-  std::string curLine;
-  std::stringstream ss(command);
-
-  int onBoard;
-  int position;
-  std::string color;
-  int weight;
-  
-  int redWeightsRemaining = 0;
-  int blueWeightsRemaining = 0;
-
-  getline(ss, curLine);
-
-  if(curLine == "ADDING" || curLine=="REMOVING")
-  {
-    if(getline(ss, curLine))
-    {
-      std::stringstream st(curLine);
-      st >> onBoard >> position >> color >> weight;
-    }
+    std::string curLine;
+    std::stringstream ss(command);
+    int redWeightsRemaining=0;
+    int blueWeightsRemaining=0;
+    getline(ss, curLine);
     if(curLine == "ADDING")
-    {  
-      stateBuffer.phase = State::Phase_Adding;
-    }
-    else
     {
-      stateBuffer.phase = State::Phase_Removing;	  
-    }
-  } 
-  else 
-  {
-    std::stringstream st(curLine);
-    st >> onBoard >> position >> color >> weight;
-  }
-
-  if(onBoard == 1)
-  {
-    stateBuffer.board.SetPos(position, weight);
-    if(color == "Red")
-    {
-      stateBuffer.red.hand[weight-1] = Player::Played;
-    }
-    else if(color == "Blue")
-    {
-      stateBuffer.blue.hand[weight-1] = Player::Played;
-    }
-  }
-  else
-  {
-    std::cout<<"position: "<<position<<"weight: "<<weight<<std::endl;
-    std::cout<<"color: "<<color<<std::endl;
-    if(color == "Red")
-    {
-      stateBuffer.red.hand[weight-1] = weight;
-      redWeightsRemaining++;
-    }
-    else if(color == "Blue")
-    {
-      stateBuffer.blue.hand[weight-1] = weight;
-      blueWeightsRemaining++;
+        stateBuffer.phase = State::Phase_Adding;
     } 
     else 
-    { 
-      assert(false); 
+    {
+        stateBuffer.phase = State::Phase_Removing;
     }
-  }
-  
+    
+    while(getline(ss, curLine))
+    {
+        std::stringstream sstream(curLine);
+        int onBoard;
+        int position;
+        std::string color;
+        int weight;
+        
+        sstream >> onBoard >> position >> color >> weight;
+        
+        if(onBoard == 1)
+        {
+            stateBuffer.board.SetPos(position, weight);
+            if(color == "Red")
+            {
+                stateBuffer.red.hand[weight-1] = Player::Played;
+            }else if(color == "Blue")
+            {
+                stateBuffer.blue.hand[weight-1] = Player::Played;
+            }
+            else
+            {
+                // it is the green block.
+                return;
+            }
+        } 
+        else
+        {
+            if(color == "Red")
+            {
+                stateBuffer.red.hand[weight-1] = weight;
+            } else if(color == "Blue")
+            {
+                stateBuffer.blue.hand[weight-1] = weight;
+            } else 
+            { 
+                // 
+                assert(false); 
+            }
+        }
+    }
   if(redWeightsRemaining == blueWeightsRemaining){
     //Red's turn
     stateBuffer.turn = State::Turn_Red;
