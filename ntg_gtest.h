@@ -286,6 +286,93 @@ TEST(Torque, NoTippingComponents)
   }
 }
 
+TEST(AddingPhasePlys, NoTippingComponents)
+{
+  // Verify plys.
+  {
+    SCOPED_TRACE("PossiblePlys() adding");
+    for (int trial = 0; trial < 100; ++trial)
+    {
+      State state;
+      InitState(&state);
+      EXPECT_FALSE(Tipped(state.board));
+      std::vector<Ply> plys;
+      do 
+      {
+        // Suicidal.
+        plys.clear();
+        SuicidalPlys(state, &plys);
+        {
+          for (size_t plyIdx = 0; plyIdx < plys.size(); ++plyIdx)
+          {
+            const State stateBefore = state;
+            DoPly(plys[plyIdx], &state);
+            EXPECT_TRUE(Tipped(state.board));
+            UndoPly(plys[plyIdx], &state);
+            EXPECT_EQ(stateBefore, state);
+          }
+        }
+        // Non-suicidal.
+        plys.clear();
+        PossiblePlys(state, &plys);
+        {
+          const size_t plysFound = plys.size();
+          if (plysFound > 0)
+          {
+            for (size_t plyIdx = 0; plyIdx < plysFound; ++plyIdx)
+            {
+              const State stateBefore = state;
+              DoPly(plys[plyIdx], &state);
+              EXPECT_FALSE(Tipped(state.board));
+              UndoPly(plys[plyIdx], &state);
+              EXPECT_EQ(stateBefore, state);
+            }
+            int doIdx = RandBound(plysFound);
+            DoPly(plys[doIdx], &state);
+          }
+        }
+      } while ((State::Phase_Adding == state.phase) && (plys.size() > 0));
+    }
+  }
+}
+
+TEST(RemovingPhasePlys, NoTippingComponents)
+{
+  // Verify plys.
+  {
+    SCOPED_TRACE("PossiblePlys() removing");
+    for (int trial = 0; trial < 1000; ++trial)
+    {
+      State state;
+      RandomRemovingPhase(&state);
+      EXPECT_FALSE(Tipped(state.board));
+      std::vector<Ply> plys;
+      do 
+      {
+        // Non-suicidal.
+        plys.clear();
+        PossiblePlys(state, &plys);
+        {
+          const size_t plysFound = plys.size();
+          if (plysFound > 0)
+          {
+            for (size_t plyIdx = 0; plyIdx < plysFound; ++plyIdx)
+            {
+              const State stateBefore = state;
+              DoPly(plys[plyIdx], &state);
+              EXPECT_FALSE(Tipped(state.board));
+              UndoPly(plys[plyIdx], &state);
+              EXPECT_EQ(stateBefore, state);
+            }
+            int doIdx = RandBound(plysFound);
+            DoPly(plys[doIdx], &state);
+          }
+        }
+      } while (plys.size() > 0);
+    }
+  }
+}
+
 }
 
 #endif //_NO_TIPPING_GAME_NTG_GTEST_H_
