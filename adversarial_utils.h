@@ -93,6 +93,16 @@ int OneWeightFinalSet(StatePlysPair* set)
   return static_cast<int>(plys.size());
 }
 
+struct StablePlyRemoveIfHelper
+{
+  inline bool operator()(const Ply& rhs) const
+  {
+    return (lhs.pos == rhs.pos) &&
+           (lhs.wIdx == rhs.wIdx);
+  }
+  Ply lhs;
+};
+
 /// <summary> Set of plys stable with two weights such that removal of either
 ///   weight leads to a loss.
 /// </summary>
@@ -119,6 +129,8 @@ int TwoWeightFinalSet(std::vector<StatePlysPair>* set)
   // is also unique.
   set->resize(suicidalPlys.size());
   std::vector<StatePlysPair>::iterator statePlys = set->begin();
+  Board boardChkPly;
+  ClearBoard(&boardChkPly);
   for (std::vector<Ply>::const_iterator suicidePly = suicidalPlys.begin();
        suicidePly != suicidalPlys.end();
        ++suicidePly, ++statePlys)
@@ -130,6 +142,19 @@ int TwoWeightFinalSet(std::vector<StatePlysPair>* set)
     DoPly(*suicidePly, &state);
     // Get possible plys from suicidal state.
     PossiblePlys(state, &plys);
+    // Only keep plys that do not stand on their own.
+    for (size_t plyIdx = 0; plyIdx < plys.size(); ++plyIdx)
+    {
+      const int pos = plys[plyIdx].pos;
+      boardChkPly[pos] = CurrentPlayer(&state)->hand[plys[plyIdx].wIdx];
+      if (!Tipped(boardChkPly))
+      {
+        plys[plyIdx] = Ply();
+      }
+      boardChkPly[pos] = Board::Empty;
+    }
+    plys.erase(std::remove_if(plys.begin(), plys.end(),
+                              StablePlyRemoveIfHelper()), plys.end());
     setFlattenedSize += static_cast<int>(plys.size());
   }
   return setFlattenedSize;
@@ -312,11 +337,12 @@ struct BoardEvaluationInverseDepthWinStates
     }
   }
 
-  // TODO(reissb) -- 201111003 -- Note that this is ASSUMING the red player.
-  //   Need to make this parameterized for the actual player.
   /// <summary> Score a board. </summary>
   int operator()(const State& state)
   {
+    // TODO(reissb) -- 201111003 -- Note that this is ASSUMING the red player.
+    //   Need to make this parameterized for the actual MAX player.
+    
     // Count win states reachable.
     const int redWinStatesReachable = RedWinStatesReachable(state.board);
     const int blueWinStatesReachable = BlueWinStatesReachable(state.board);

@@ -142,14 +142,12 @@ struct State
   {
     Turn_Red = 0,
     Turn_Blue,
-    Turn_Count,
   };
 
   enum Phase
   {
     Phase_Adding = 0,
     Phase_Removing,
-    Phase_Count,
   };
 
   enum { NumRemoved = (2 * Player::NumWeights) + detail::Board_InitWeights, };
@@ -161,6 +159,36 @@ struct State
   Phase phase;
   Weight removed[NumRemoved];
 };
+
+/// <summary> Switch a turn. </summary>
+inline void NextTurn(State::Turn* turn)
+{
+  assert(turn);
+  switch (*turn)
+  {
+  case State::Turn_Red:
+    *turn = State::Turn_Blue;
+    break;
+  case State::Turn_Blue:
+    *turn = State::Turn_Red;
+    break;
+  }
+}
+
+/// <summary> Switch a phase. </summary>
+inline void NextPhase(State::Phase* phase)
+{
+  assert(phase);
+  switch (*phase)
+  {
+  case State::Phase_Adding:
+    *phase = State::Phase_Removing;
+    break;
+  case State::Phase_Removing:
+    *phase = State::Phase_Adding;
+    break;
+  }
+}
 
 /// <summary> Get the current player from the state. </summary>
 inline Player* CurrentPlayer(State* state)
@@ -293,7 +321,8 @@ namespace detail
 ///     suicidal moves, or similar sets with different boundaries.
 ///   </para>
 /// </remarks>
-template <typename LeftPivotOp, typename RightPivotOp>
+template <typename LeftPivotOp, typename RightPivotOp,
+          typename CombineOp>
 class ExpandState
 {
 public:
@@ -308,6 +337,7 @@ public:
     typedef std::binder2nd<RightPivotOp> BoundRightPivotOp;
     const BoundLeftPivotOp exclL = std::bind2nd(LeftPivotOp(), 0);
     const BoundRightPivotOp exclR = std::bind2nd(RightPivotOp(), 0);
+    const CombineOp combineOp;
     // Removing phase just uses whatever is on the board.
     if (State::Phase_Removing == state.phase)
     {
@@ -323,8 +353,10 @@ public:
           // Torque due to this weight.
           const int weightTorqueL = leverL * (*w);
           const int weightTorqueR = leverR * (*w);
+          const bool leftIncl = !exclL(torqueL - weightTorqueL);
+          const bool rightIncl = !exclR(torqueR - weightTorqueR);
           // Keep this ply?
-          if (!(exclL(torqueL - weightTorqueL) | exclR(torqueR - weightTorqueR)))
+          if (combineOp(leftIncl, rightIncl))
           {
             plys->push_back(Ply(pos));
           }
@@ -346,56 +378,22 @@ public:
         }
         int pos = -Board::Size;
         const Weight* boardVal = board.begin();
-        // Compute for left pivot.
+        int leverL = Board::PivotL - pos;
+        int leverR = Board::PivotR - pos;
+        for (; pos <= Board::Size; ++pos, ++boardVal, --leverL, --leverR)
         {
-          int lever = Board::PivotL - pos;
-          for (; pos < Board::PivotL; ++pos, ++boardVal, --lever)
+          if (Board::Empty == *boardVal)
           {
-            TestPosPhaseAdding(boardVal, w, lever, torqueL,
-                               pos, wIdx, exclL, plys);
+            const int weightTorqueL = leverL * (*w);
+            const int weightTorqueR = leverR * (*w);
+            const bool leftIncl = !exclL(torqueL + weightTorqueL);
+            const bool rightIncl = !exclR(torqueR + weightTorqueR);
+            if (combineOp(leftIncl, rightIncl))
+            {
+              plys->push_back(Ply(pos, wIdx));
+            }
           }
         }
-        // Compute between pivots.
-        {
-          int lever = Board::PivotL - pos;
-          for (; pos <= Board::PivotR; ++pos, ++boardVal, --lever)
-          {
-            // We only need to test PivotL since adding a weight between the
-            // pivots is always valid and never suicidal.
-            TestPosPhaseAdding(boardVal, w, lever, torqueL,
-                               pos, wIdx, exclL, plys);
-          }
-        }
-        // Compute for right pivot.
-        {
-          int lever = Board::PivotR - pos;
-          for (; pos <= Board::Size; ++pos, ++boardVal, --lever)
-          {
-            TestPosPhaseAdding(boardVal, w, lever, torqueR,
-                               pos, wIdx, exclR, plys);
-          }
-        }
-      }
-    }
-  }
-
-private:
-  template <typename ExcludeFunc>
-  inline static void TestPosPhaseAdding(const Weight* boardVal,
-                                        const Weight* w,
-                                        const int lever,
-                                        const int torqueP,
-                                        const int pos,
-                                        const int wIdx,
-                                        const ExcludeFunc& excl,
-                                        std::vector<Ply>* plys)
-  {
-    if (Board::Empty == *boardVal)
-    {
-      const int weightTorque = lever * (*w);
-      if (!excl(torqueP + weightTorque))
-      {
-        plys->push_back(Ply(pos, wIdx));
       }
     }
   }
@@ -459,7 +457,8 @@ inline void PlyMutateState(const Ply& ply, State* state)
 inline void PossiblePlys(const State& state, std::vector<Ply>* plys)
 {
   detail::ExpandState<std::greater<Weight>,
-                      std::less<Weight> >::Run(state, plys);
+                      std::less<Weight>,
+                      std::logical_and<Weight> >::Run(state, plys);
 }
 
 /// <summary> Discover all suicidal plys from a given state. </summary>
@@ -469,7 +468,8 @@ inline void SuicidalPlys(const State& state, std::vector<Ply>* plys)
   //   when removing. Don't need them for anything right now.
   assert(State::Phase_Removing != state.phase);
   detail::ExpandState<std::less_equal<Weight>,
-                      std::greater_equal<Weight> >::Run(state, plys);
+                      std::greater_equal<Weight>,
+                      std::logical_or<Weight> >::Run(state, plys);
 }
 
 /// <summary> Apply the ply and get the resulting state. </summary>
@@ -481,21 +481,16 @@ inline void SuicidalPlys(const State& state, std::vector<Ply>* plys)
 inline void DoPly(const Ply& ply, State* state)
 {
   detail::PlyMutateState<std::equal_to<State::Phase> >(ply, state);
+
   // Swap the active player.
-  {
-    State::Turn& turn = state->turn;
-    ++reinterpret_cast<int&>(turn);
-    reinterpret_cast<int&>(turn) %= State::Turn_Count;
-  }
+  NextTurn(&state->turn);
   // If both hands are empty, switch the phase.
   {
     const bool redEmpty = (0 == state->red.remain);
     const bool blueEmpty = (0 == state->blue.remain);
     if (redEmpty && blueEmpty)
     {
-      State::Phase& phase = state->phase;
-      ++reinterpret_cast<int&>(phase);
-      reinterpret_cast<int&>(phase) %= State::Phase_Count;
+      NextPhase(&state->phase);
     }
   }
 }
@@ -512,17 +507,12 @@ inline void UndoPly(const Ply& ply, State* state)
     const bool blueEmpty = (0 == state->blue.remain);
     if (redEmpty && blueEmpty)
     {
-      State::Phase& phase = state->phase;
-      ++reinterpret_cast<int&>(phase);
-      reinterpret_cast<int&>(phase) %= State::Phase_Count;
+      NextPhase(&state->phase);
     }
   }
   // Swap the active player.
-  {
-    State::Turn& turn = state->turn;
-    ++reinterpret_cast<int&>(turn);
-    reinterpret_cast<int&>(turn) %= State::Turn_Count;
-  }
+  NextTurn(&state->turn);
+
   detail::PlyMutateState<std::not_equal_to<State::Phase> >(ply, state);
 }
 
