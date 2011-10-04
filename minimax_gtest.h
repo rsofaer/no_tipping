@@ -19,6 +19,7 @@ TEST(Minimax, Minimax)
     params.maxDepth = 3;
     params.plys.resize(params.maxDepth - 1);
   }
+  std::cout << "maxDepth: " << params.maxDepth << std::endl;
   BoardEvaluationInverseDepthWinStates evalFunc;
   Ply ply;
   int minimax = MiniMax::Run(&params, &state, &evalFunc, &ply);

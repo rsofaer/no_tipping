@@ -11,11 +11,27 @@ namespace math
 /// <summary> Partition consecutive intervals of size bound mapped to the
 ///   numbers [0, bound - 1].
 /// </summary>
+int RandBound(const int bound)
+{
+  assert(bound <= RAND_MAX);
+  int factor = ((RAND_MAX - bound) / bound) + 1;
+  int limit = factor * bound;
+  int r;
+  do
+  {
+    r = rand();
+  } while (r >= limit);
+  return r / factor;
+}
+
+/// <summary> Partition consecutive intervals of size bound mapped to the
+///   numbers [0, bound - 1].
+/// </summary>
 struct RandBoundedGenerator
 {
   RandBoundedGenerator(const int bound_)
   : bound(bound_),
-    factor(((RAND_MAX - bound + 1) / bound) + 1),
+    factor(((RAND_MAX - bound) / bound) + 1),
     limit(factor * bound)
   {
     assert(bound <= RAND_MAX);

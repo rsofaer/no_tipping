@@ -25,7 +25,7 @@ enum { Board_Size = 15, };
 enum { Board_PivotL = -3, };
 enum { Board_PivotR = -1, };
 enum { Board_BoardWeight = 3, };
-enum { Player_NumWeights = 7, };
+enum { Player_NumWeights = 10, };
 const int Board_InitWeightPairs[][2] = { {-4, 3} };
 enum { Board_InitWeights = sizeof(Board_InitWeightPairs) /
                            sizeof(Board_InitWeightPairs[0]), };
@@ -178,9 +178,11 @@ inline const Player* CurrentPlayer(const State* state)
 /// <summary> Initialize player to game defaults. </summary>
 void InitPlayer(Player* player)
 {
-  static const Weight s_initW[Player::NumWeights] = { 1, 2, 3, 4, 5, 6, 7 };
   player->remain = Player::NumWeights;
-  memcpy(player->hand, s_initW, sizeof(s_initW));
+  for (int wIdx = 0; wIdx < Player::NumWeights; ++wIdx)
+  {
+    player->hand[wIdx] = wIdx + 1;
+  }
 }
 
 /// <summary> Clear the game board. </summary>
@@ -291,79 +293,113 @@ namespace detail
 ///     suicidal moves, or similar sets with different boundaries.
 ///   </para>
 /// </remarks>
-template <typename LeftPivotOp>
-void ExpandState(const State& state, std::vector<Ply>* plys)
+template <typename LeftPivotOp, typename RightPivotOp>
+class ExpandState
 {
-  assert(plys->empty());
-
-  const Board& board = state.board;
-  const int torqueL = TorqueL(board);
-  const int torqueR = TorqueR(board);
-  const Player* currentPlayer = CurrentPlayer(&state);
-  int startPos = -Board::Size;
-  int wIdx = 0;
-  for (const int* w = currentPlayer->hand;
-       w < (currentPlayer->hand + Player::NumWeights);
-       ++w, ++wIdx)
+public:
+  static void Run(const State& state, std::vector<Ply>* plys)
   {
-    // Is weight already played?
-    if (Player::Played == *w)
+    assert(plys->empty());
+
+    const Board& board = state.board;
+    const int torqueL = TorqueL(board);
+    const int torqueR = TorqueR(board);
+    typedef std::binder2nd<LeftPivotOp> BoundLeftPivotOp;
+    typedef std::binder2nd<RightPivotOp> BoundRightPivotOp;
+    const BoundLeftPivotOp exclL = std::bind2nd(LeftPivotOp(), 0);
+    const BoundRightPivotOp exclR = std::bind2nd(RightPivotOp(), 0);
+    // Removing phase just uses whatever is on the board.
+    if (State::Phase_Removing == state.phase)
     {
-      continue;
-    }
-    // Compute for left pivot.
-    {
-      const std::binder2nd<LeftPivotOp> excl =
-        std::bind2nd(LeftPivotOp(), 0);
-      for (int pos = startPos; pos < Board::PivotL; ++pos)
+      int pos = -Board::Size;
+      const Weight* w = board.begin();
+      int leverL = pos - Board::PivotL;
+      int leverR = Board::PivotR - pos;
+      for (; pos < Board::Size; ++pos, ++w, --leverL, --leverR)
       {
-        if (board[pos] != Board::Empty)
+        // Weight is placed?
+        if (Board::Empty != *w)
         {
-          continue;
-        }
-        const int weightTorque = (Board::PivotL - pos) * (*w);
-        if (excl(weightTorque + torqueL))
-        {
-          continue;
-        }
-        else
-        {
-          plys->push_back(Ply(pos, wIdx));
+          // Torque due to this weight.
+          const int weightTorqueL = leverL * (*w);
+          const int weightTorqueR = leverR * (*w);
+          // Keep this ply?
+          if (!(exclL(torqueL - weightTorqueL) | exclR(torqueR - weightTorqueR)))
+          {
+            plys->push_back(Ply(pos));
+          }
         }
       }
     }
-    // Compute between pivots.
-    for (int pos = Board::PivotL; pos <= Board::PivotR; ++pos)
+    else
     {
-      if (board[pos] != Board::Empty)
+      const Player* currentPlayer = CurrentPlayer(&state);
+      int wIdx = 0;
+      for (const int* w = currentPlayer->hand;
+           w < (currentPlayer->hand + Player::NumWeights);
+           ++w, ++wIdx)
       {
-        continue;
-      }
-      plys->push_back(Ply(pos, wIdx));
-    }
-    // Compute for right pivot.
-    {
-      const std::unary_negate<std::binder2nd<LeftPivotOp> > excl =
-        std::not1(std::bind2nd(LeftPivotOp(), -1));
-      for (int pos = Board::PivotR + 1; pos <= Board::Size; ++pos)
-      {
-        if (board[pos] != Board::Empty)
+        // Is weight already played?
+        if (Player::Played == *w)
         {
           continue;
         }
-        const int weightTorque = (Board::PivotR - pos) * (*w);
-        if (excl(weightTorque + torqueR))
+        int pos = -Board::Size;
+        const Weight* boardVal = board.begin();
+        // Compute for left pivot.
         {
-          continue;
+          int lever = Board::PivotL - pos;
+          for (; pos < Board::PivotL; ++pos, ++boardVal, --lever)
+          {
+            TestPosPhaseAdding(boardVal, w, lever, torqueL,
+                               pos, wIdx, exclL, plys);
+          }
         }
-        else
+        // Compute between pivots.
         {
-          plys->push_back(Ply(pos, wIdx));
+          int lever = Board::PivotL - pos;
+          for (; pos <= Board::PivotR; ++pos, ++boardVal, --lever)
+          {
+            // We only need to test PivotL since adding a weight between the
+            // pivots is always valid and never suicidal.
+            TestPosPhaseAdding(boardVal, w, lever, torqueL,
+                               pos, wIdx, exclL, plys);
+          }
+        }
+        // Compute for right pivot.
+        {
+          int lever = Board::PivotR - pos;
+          for (; pos <= Board::Size; ++pos, ++boardVal, --lever)
+          {
+            TestPosPhaseAdding(boardVal, w, lever, torqueR,
+                               pos, wIdx, exclR, plys);
+          }
         }
       }
     }
   }
-}
+
+private:
+  template <typename ExcludeFunc>
+  inline static void TestPosPhaseAdding(const Weight* boardVal,
+                                        const Weight* w,
+                                        const int lever,
+                                        const int torqueP,
+                                        const int pos,
+                                        const int wIdx,
+                                        const ExcludeFunc& excl,
+                                        std::vector<Ply>* plys)
+  {
+    if (Board::Empty == *boardVal)
+    {
+      const int weightTorque = lever * (*w);
+      if (!excl(torqueP + weightTorque))
+      {
+        plys->push_back(Ply(pos, wIdx));
+      }
+    }
+  }
+};
 
 template <typename PhaseOp>
 inline void PlyMutateState(const Ply& ply, State* state)
@@ -422,13 +458,18 @@ inline void PlyMutateState(const Ply& ply, State* state)
 /// <summary> Discover all non suicidal plys from a given state. </summary>
 inline void PossiblePlys(const State& state, std::vector<Ply>* plys)
 {
-  detail::ExpandState<std::greater<Weight> >(state, plys);
+  detail::ExpandState<std::greater<Weight>,
+                      std::less<Weight> >::Run(state, plys);
 }
 
 /// <summary> Discover all suicidal plys from a given state. </summary>
 inline void SuicidalPlys(const State& state, std::vector<Ply>* plys)
 {
-  detail::ExpandState<std::less_equal<Weight> >(state, plys);
+  // TODO(reissb) -- 20111004 -- Suicidal plys not computed properly
+  //   when removing. Don't need them for anything right now.
+  assert(State::Phase_Removing != state.phase);
+  detail::ExpandState<std::less_equal<Weight>,
+                      std::greater_equal<Weight> >::Run(state, plys);
 }
 
 /// <summary> Apply the ply and get the resulting state. </summary>

@@ -39,4 +39,42 @@ bool PlayerEmptyHand(const hps::Player& player)
   return true;
 }
 
+void RandomRemovingPhase(hps::State* state)
+{
+  using namespace hps;
+  Board& board = state->board;
+  InitState(state);
+  // Fill with weights.
+  {
+    assert(Board::Positions >= (2 * Player::NumWeights));
+    Weight* boardVal = board.begin();
+    for (int wIdx = 0; wIdx < Player::NumWeights; ++wIdx)
+    {
+      {
+        Player* player = &state->red;
+        Weight* w = player->hand + wIdx;
+        while (Board::Empty != *boardVal) { ++boardVal; }
+        *boardVal++ = *w;
+        *w = Player::Played;
+        --player->remain;
+      }
+      {
+        Player* player = &state->blue;
+        Weight* w = player->hand + wIdx;
+        while (Board::Empty != *boardVal) { ++boardVal; }
+        *boardVal++ = *w;
+        *w = Player::Played;
+        --player->remain;
+      }
+    }
+  }
+  // Find stable ordering.
+  do
+  {
+    std::random_shuffle(board.begin(), board.end());
+  } while (Tipped(board));
+  // Switch phase.
+  state->phase = State::Phase_Removing;
+}
+
 #endif //_NO_TIPPING_GAME_NTG_GTEST_UTILS_H_
