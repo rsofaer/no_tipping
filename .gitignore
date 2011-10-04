@@ -1,0 +1,7 @@
+gtest-1.6.0/
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+ntg.xcodeproj/
+
