@@ -9,13 +9,16 @@ class Contestant extends NoTippingPlayer
     }
     protected String process(String command) 
     {
+	System.out.println("command received: "+command);
 	String move = null;
 	try 
 	{
 	   move = libNtgJni.calculateMove(command);
+	   System.out.println("Calculated move: "+ move);
     	} 
 	catch (Exception ev) 
 	{
+    System.out.println("Error in calculateMove");
 	    System.out.println(ev.getMessage());
 	}
 	return move;			
@@ -26,6 +29,7 @@ class Contestant extends NoTippingPlayer
 	if(args.length==1)
 	{
 	    int port = Integer.parseInt(args[0]);
+	    System.out.println("port: "+port);
 	    new Contestant(port);
 	}
 	else

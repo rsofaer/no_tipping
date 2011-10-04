@@ -4,6 +4,9 @@
 #include <string>
 #include <sstream>
 #include <cstring>
+#include "minimax.h"
+#include "adversarial_utils.h"
+
 
 
 namespace hps
@@ -11,78 +14,97 @@ namespace hps
 namespace ntg
 {
 
-std::string CalculateMove(std::string command,State& stateBuffer)
+void BuildState(std::string command,State& stateBuffer)
 {
-  std::string curLine;
-  std::stringstream ss(command);
+  std::cout << "Building state\n";
+    std::string curLine;
+    std::stringstream ss(command);
+    int redWeightsRemaining=0;
+    int blueWeightsRemaining=0;
+    getline(ss, curLine);
 
-  int onBoard;
-  int position;
-  std::string color;
-  int weight;
+    std::cout << curLine << "\n";
 
-  getline(ss, curLine);
-
-  if(curLine == "ADDING" || curLine=="REMOVING")
-  {
-    if(getline(ss, curLine))
-    {
-      std::stringstream st(curLine);
-      st >> onBoard >> position >> color >> weight;
-    }
     if(curLine == "ADDING")
-    {  
-      stateBuffer.phase = State::Phase_Adding;
-    }
-    else
     {
-      stateBuffer.phase = State::Phase_Removing;	  
-    }
-  } 
-  else 
-  {
-    std::stringstream st(curLine);
-    st >> onBoard >> position >> color >> weight;
-  }
-
-  if(onBoard == 1)
-  {
-    stateBuffer.board.SetPos(position, weight);
-    if(color == "Red")
-    {
-      stateBuffer.red.hand[weight-1] = Player::Played;
-    }
-    else if(color == "Blue")
-    {
-      stateBuffer.blue.hand[weight-1] = Player::Played;
-    }
-  }
-  else
-  {
-    std::cout<<"position: "<<position<<"weight: "<<weight<<std::endl;
-    std::cout<<"color: "<<color<<std::endl;
-    if(color == "Red")
-    {
-      stateBuffer.red.hand[weight-1] = weight;
-    }
-    else if(color == "Blue")
-    {
-      stateBuffer.blue.hand[weight-1] = weight;
+        stateBuffer.phase = State::Phase_Adding;
     } 
     else 
-    { 
-      assert(false); 
+    {
+        stateBuffer.phase = State::Phase_Removing;
     }
-  }
-  std::string calculatedMove;//=call to minimax.
-  return calculatedMove;
+    
+    while(getline(ss, curLine))
+    {
+      std::cout << curLine << "\n";
+        std::stringstream sstream(curLine);
+        int onBoard;
+        int position;
+        std::string color;
+        int weight;
+        
+        sstream >> onBoard >> position >> color >> weight;
+        
+        if(onBoard == 1)
+        {
+            stateBuffer.board.SetPos(position, weight);
+            if(color == "Red")
+            {
+                stateBuffer.red.hand[weight-1] = Player::Played;
+            }else if(color == "Blue")
+            {
+                stateBuffer.blue.hand[weight-1] = Player::Played;
+            }
+            else
+            {
+                // it is the green block.
+                return;
+            }
+        } 
+        else
+        {
+            if(color == "Red")
+            {
+                stateBuffer.red.hand[weight-1] = weight;
+            } else if(color == "Blue")
+            {
+                stateBuffer.blue.hand[weight-1] = weight;
+            } else 
+            { 
+                // 
+                assert(false); 
+            }
+        }
+    }
+  if(redWeightsRemaining == blueWeightsRemaining){
+    //Red's turn
+    stateBuffer.turn = State::Turn_Red;
+  } else if(blueWeightsRemaining > redWeightsRemaining)
+  {
+    //Blue's turn
+    stateBuffer.turn = State::Turn_Blue;
+  } else { assert(false); }
 }
 
 std::string CalculateMoveWrapper(std::string command)
 {
   State stateBuffer; // get Statebuffer's previous states from a method that has saved it.
   //CalculateMove gets called on every move of the opponent, maintain a state somewhere and get it back.
-  return CalculateMove(command,stateBuffer);
+  BuildState(command,stateBuffer);
+    Minimax::Params params;
+    {
+        params.maxDepthAdding = 3;
+        params.maxDepthRemoving = 5;
+    }
+
+    BoardEvaluationInverseDepthWinStates evalFunc(stateBuffer.turn);
+    Ply ply;
+    Minimax::Run(&params, &stateBuffer, &evalFunc, &ply);
+    int position = ply.pos;
+    int weight = CurrentPlayer(&stateBuffer)->hand[ply.wIdx];
+    std::stringstream ss;
+    ss << position << " " << weight;
+    return "yo!";
 }
 
 }

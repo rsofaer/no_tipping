@@ -31,28 +31,17 @@ public abstract class NoTippingPlayer {
             System.err.println(ev.getMessage());
         }
         String command;
-        StringBuffer commandBuffer = new StringBuffer();
-        try 
-	{
-           while((command = in.readLine())!=null)
-	   {
-		if(command.equalsIgnoreCase("shutdown"))
-		{
-		    break;
-		}
-		else if(command.equalsIgnoreCase("Adding")||command.equalsIgnoreCase("Removing"))
-		{
-    		    commandBuffer.append(command + "\n");
-		    continue;
-		}
-		else
-		{
-    		    commandBuffer.append(command + "\n");
-		    out.println(process(commandBuffer.toString()));    
-		    commandBuffer.delete(0,commandBuffer.length());
-		}
-	   }
-	}
+        StringBuffer state = new StringBuffer();
+        try {
+            while ((command = in.readLine())!= null) {
+                if (command.equals("STATE END")) {
+                    out.println(process(state.toString()));
+                    state.delete(0, state.length());
+                    continue;
+                }
+                state.append(command+"\n");
+            }
+        }
         catch (IOException io) {
             System.err.println(io.getMessage());
         }
