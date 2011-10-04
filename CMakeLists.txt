@@ -19,6 +19,7 @@ set(SRCS
 include_directories(${JNI_INCLUDE_DIRS})
 add_library(libntgjni SHARED ${SRCS} ${HEADERS})
 target_link_libraries(libntgjni libntg ${JNI_LIBRARIES})
+SET_TARGET_PROPERTIES(libntgjni PROPERTIES COMPILE_FLAGS -fPIC)
 
 if(HPS_GTEST_ENABLED)
   project(ntg_gtest)
