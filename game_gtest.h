@@ -53,8 +53,8 @@ struct PlayerBattle
     *redWins = 0;
     for (int trial = 0; trial < Trials; ++trial)
     {
-      RedPlayer red;
-      BluePlayer blue;
+      RedPlayer red(State::Turn_Red);
+      BluePlayer blue(State::Turn_Blue);
       State state;
       InitState(&state);
       int turns = 0;
@@ -90,6 +90,15 @@ struct PlayerBattle
 //  PlayerBattle<RandomPlayer, RandomPlayer, RandomGames>::Play(&redWins);
 //  const float redWinProportion = static_cast<float>(redWins) / RandomGames;
 //  EXPECT_NEAR(0.5f, redWinProportion, 0.05f);
+//}
+
+//TEST(RandomVsMiniMax, NoTippingGames)
+//{
+//  enum { Games = 1000, };
+//  int redWins;
+//  PlayerBattle<RandomPlayer, MinimaxPlayer, Games>::Play(&redWins);
+//  const float redWinProportion = static_cast<float>(redWins) / Games;
+//  EXPECT_NEAR(1.0f, redWinProportion, 0.01f);
 //}
 
 TEST(MiniMaxVsRandom, NoTippingGames)

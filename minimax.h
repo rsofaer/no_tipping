@@ -76,23 +76,18 @@ struct Minimax
         removingDepth = -remainSum - params->depth + 1;
       }
     }
-    assert(maxDepth > 0);
+    assert(maxDepth > 1);
     assert(params->depth < maxDepth);
     ++params->depth;
-    // If depth bound reached, return score current state.
-    if (maxDepth == params->depth)
-    {
-      --params->depth;
-      return (*evalFunc)(*state);
-    }
     // Get the children of the current state.
     std::vector<Ply>& plys = params->plys[params->depth - 1];
     plys.clear();
     PossiblePlys(*state, &plys);
-    // If this is a leaf, return score current state.
+    // A leaf has no non-suicidal moves. Who won?
+    int minimax;
     if (0 == plys.size())
     {
-      int minimax;
+      AnyPlyWillDo(state, ply);
       if (params->depth & 1)
       {
         // I have no moves, so I lose.
@@ -112,22 +107,28 @@ struct Minimax
       --params->depth;
       return (*evalFunc)(*state);
     }
+    // Init score.
+    std::vector<Ply>::const_iterator testPly = plys.begin();
+    {
+      *ply = *testPly;
+      DoPly(*ply, state);
+      Ply tossPly;
+      minimax = Run(params, state, evalFunc, &tossPly);
+      UndoPly(*ply, state);
+    }
     // If I am MAX, then maximize my score. If I am MIN then minimize it.
-    int minimax;
     // I am MAX?
     if (params->depth & 1)
     {
-      minimax = std::numeric_limits<int>::min();
       MinimaxChildrenHelper<std::greater<int> >(params, state,
-                                                plys.begin(), plys.end(),
+                                                ++testPly, plys.end(),
                                                 evalFunc, ply, &minimax);
     }
     // I am MIN.
     else
     {
-      minimax = std::numeric_limits<int>::max();
       MinimaxChildrenHelper<std::less<int> >(params, state,
-                                             plys.begin(), plys.end(),
+                                                ++testPly, plys.end(),
                                              evalFunc, ply, &minimax);
     }
     --params->depth;

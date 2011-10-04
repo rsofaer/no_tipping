@@ -516,6 +516,35 @@ inline void UndoPly(const Ply& ply, State* state)
   detail::PlyMutateState<std::not_equal_to<State::Phase> >(ply, state);
 }
 
+/// <summary> Function to assist in choosing a losing move. </summary>
+void AnyPlyWillDo(State* state, Ply* ply)
+{
+  assert(state);
+  // Find open board space.
+  for (int pos = -Board::Size; pos <= Board::Size; ++pos)
+  {
+    if (Board::Empty != state->board[pos])
+    {
+      *ply = Ply(pos);
+      break;
+    }
+  }
+  // when adding, find a weight to place.
+  if (State::Phase_Adding == state->phase)
+  {
+    // Take anything from our hand.
+    const Player* player = CurrentPlayer(state);
+    for (int wIdx = 0; wIdx < Player::NumWeights; ++wIdx)
+    {
+      if (Player::Played != player->hand[wIdx])
+      {
+        ply->wIdx = wIdx;
+        break;
+      }
+    }
+  }
+}
+
 }
 using namespace ntg;
 }

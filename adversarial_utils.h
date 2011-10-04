@@ -273,8 +273,9 @@ struct BoardEvaluationInverseDepthWinStates
     return count;
   }
 
-  BoardEvaluationInverseDepthWinStates()
-    : blueWinsBoardMap(),
+  BoardEvaluationInverseDepthWinStates(const State::Turn who_)
+    : who(who_),
+      blueWinsBoardMap(),
       redWinsBoardMap(),
       bpws()
   {
@@ -340,26 +341,49 @@ struct BoardEvaluationInverseDepthWinStates
   /// <summary> Score a board. </summary>
   int operator()(const State& state)
   {
-    // TODO(reissb) -- 201111003 -- Note that this is ASSUMING the red player.
-    //   Need to make this parameterized for the actual MAX player.
-    
+    assert(!Tipped(state.board));
     // Count win states reachable.
     const int redWinStatesReachable = RedWinStatesReachable(state.board);
     const int blueWinStatesReachable = BlueWinStatesReachable(state.board);
-    // Return score based on win states.
-    if ((1 == redWinStatesReachable) && (0 == blueWinStatesReachable))
+    int score;
+    // I am red?
+    if (State::Turn_Red == who)
     {
-      return std::numeric_limits<int>::max();
+      // Return score based on win states.
+      if ((1 == redWinStatesReachable) && (0 == blueWinStatesReachable))
+      {
+        score = std::numeric_limits<int>::max();
+      }
+      else if ((0 == redWinStatesReachable) && (1 == blueWinStatesReachable))
+      {
+        score = std::numeric_limits<int>::min();
+      }
+      else
+      {
+        score = redWinStatesReachable - blueWinStatesReachable;
+      }
     }
-    else if ((0 == redWinStatesReachable) && (1 == blueWinStatesReachable))
-    {
-      return std::numeric_limits<int>::min();
-    }
+    // I am blue.
     else
     {
-      return redWinStatesReachable - blueWinStatesReachable;
+      // Return score based on win states.
+      if ((1 == redWinStatesReachable) && (0 == blueWinStatesReachable))
+      {
+        score = std::numeric_limits<int>::min();
+      }
+      else if ((0 == redWinStatesReachable) && (1 == blueWinStatesReachable))
+      {
+        score = std::numeric_limits<int>::max();
+      }
+      else
+      {
+        score = blueWinStatesReachable - redWinStatesReachable;
+      }
     }
+    return score;
   }
+
+  State::Turn who;
 
   BoardPosMap blueWinsBoardMap;
   BoardPosPairsMap redWinsBoardMap;
