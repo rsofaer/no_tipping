@@ -85,7 +85,7 @@ struct MiniMax
     if (params->depth & 1)
     {
       alpha = std::numeric_limits<int>::min();
-      int score = AlphaBetaHelper<std::greater<int> >(params, state,
+      int score = AlphaBetaChildrenHelper<std::greater<int> >(params, state,
                                                 plys.begin(), plys.end(),
                                                 evalFunc, ply);
       alpha = max(alpha, score);
@@ -99,7 +99,7 @@ struct MiniMax
     else
     {
       beta = std::numeric_limits<int>::max();
-      int score = AlphaBetaHelper<std::less<int> >(params, state,
+      int score = AlphaBetaChildrenHelper<std::less<int> >(params, state,
                                              plys.begin(), plys.end(),
                                              evalFunc, ply);
       beta = min(beta, score);
