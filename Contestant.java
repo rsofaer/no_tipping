@@ -1,19 +1,18 @@
-import java.io.*;
-import LibNtgJni;
-
 class Contestant extends NoTippingPlayer 
 {
-    LibNtgJni libNtgJni = null;
-    Contestant(int port) 
+    private LibNtgJni libNtgJni = null;
+    private int N=0;
+    public Contestant(int port) 
     {
 	super(port);
-	ntJniWrap = new NoTippingJniWrapper();
+	libNtgJni = new LibNtgJni();
     }
     protected String process(String command) 
     {
+	String move = null;
 	try 
 	{
-	    String move = libNtgJni.calculateMove(command);
+	   move = libNtgJni.calculateMove(command);
     	} 
 	catch (Exception ev) 
 	{
@@ -24,6 +23,14 @@ class Contestant extends NoTippingPlayer
 
     public static void main(String[] args) throws Exception 
     {
-	new Contestant(Integer.parseInt(args[0]));
+	if(args.length==1)
+	{
+	    int port = Integer.parseInt(args[0]);
+	    new Contestant(port);
+	}
+	else
+	{
+	    System.out.println("Usage: Contestant.java <port-number> <N>");
+	}
     }
 }
