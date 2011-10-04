@@ -70,7 +70,7 @@ struct PlayerBattle
         {
           blue.NextPly(&state, &ply);
         }
-        PrintPly(ply, state, turns);
+        //PrintPly(ply, state, turns);
         DoPly(ply, &state);
         if (Tipped(state.board))
         {
@@ -103,9 +103,10 @@ struct PlayerBattle
 
 TEST(MiniMaxVsRandom, NoTippingGames)
 {
-  enum { Games = 1000, };
+  enum { Games = 10, };
   int redWins;
   PlayerBattle<MinimaxPlayer, RandomPlayer, Games>::Play(&redWins);
+  std::cout << "Red won " << redWins << " times\n";
   const float redWinProportion = static_cast<float>(redWins) / Games;
   EXPECT_NEAR(1.0f, redWinProportion, 0.01f);
 }

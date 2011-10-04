@@ -1,6 +1,7 @@
 #ifndef _NO_TIPPING_GAME_ADVERSARIAL_UTILS_H_
 #define _NO_TIPPING_GAME_ADVERSARIAL_UTILS_H_
 #include "combination.h"
+#include "rand_bound_generator.h"
 
 namespace hps
 {
@@ -338,6 +339,14 @@ struct BoardEvaluationInverseDepthWinStates
     }
   }
 
+  float randScalar()
+  {
+    float bound = (float) RandBound(4);
+    bound = bound/5;
+    bound = bound + 0.9;
+    return bound;
+  }
+  
   /// <summary> Score a board. </summary>
   int operator()(const State& state)
   {
@@ -361,6 +370,7 @@ struct BoardEvaluationInverseDepthWinStates
       else
       {
         score = redWinStatesReachable - blueWinStatesReachable;
+        score = randScalar() * score;
       }
     }
     // I am blue.
@@ -378,6 +388,8 @@ struct BoardEvaluationInverseDepthWinStates
       else
       {
         score = blueWinStatesReachable - redWinStatesReachable;
+        score = randScalar() * score;
+
       }
     }
     return score;
