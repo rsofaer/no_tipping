@@ -14,9 +14,9 @@ bool operator==(const GenericBoard<BoardWeight_, PivotL_, PivotR_, Size_>& lhs,
                 const GenericBoard<BoardWeight_, PivotL_, PivotR_, Size_>& rhs)
 {
   typedef GenericBoard<BoardWeight_, PivotL_, PivotR_, Size_> BoardType;
-  BoardType::const_iterator lhsWt = lhs.begin();
-  BoardType::const_iterator lhsWtE = lhs.end();
-  BoardType::const_iterator rhsWt = rhs.begin();
+  typename BoardType::const_iterator lhsWt = lhs.begin();
+  typename BoardType::const_iterator lhsWtE = lhs.end();
+  typename BoardType::const_iterator rhsWt = rhs.begin();
   for (; lhsWt != lhsWtE; ++lhsWt, ++rhsWt)
   {
     if (*lhsWt != *rhsWt)

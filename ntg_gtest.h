@@ -86,7 +86,7 @@ TEST(Player, NoTippingComponents)
     Player player;
     InitPlayer(&player);
     const size_t weightCount = sizeof(player.hand) / sizeof(player.hand[0]);
-    ASSERT_EQ(weightCount, player.remain);
+    EXPECT_EQ(weightCount, player.remain);
     Weight w = 1;
     for (size_t handIdx = 0; handIdx < weightCount; ++handIdx, ++w)
     {
@@ -193,34 +193,58 @@ TEST(State, NoTippingComponents)
       stateStack.push_back(state);
     }
     // Hands empty.
-    ASSERT_TRUE(PlayerEmptyHand(state.red));
-    ASSERT_TRUE(PlayerEmptyHand(state.blue));
+    EXPECT_TRUE(PlayerEmptyHand(state.red));
+    EXPECT_EQ(0, state.red.remain);
+    EXPECT_TRUE(PlayerEmptyHand(state.blue));
+    EXPECT_EQ(0, state.blue.remain);
+    // Phase should switch to removing.
+    EXPECT_EQ(State::Phase_Removing, state.phase);
+    // Make removal plys.
+    const size_t addingPlys = plys.size();
+    {
+      std::vector<int> removePhaseOrder;
+      for (int pos = -Board::Size; pos <= Board::Size; ++pos)
+      {
+        if (Board::Empty != state.board[pos])
+        {
+          removePhaseOrder.push_back(pos);
+        }
+      }
+      std::random_shuffle(removePhaseOrder.begin(), removePhaseOrder.end());
+      for (size_t plyIdx = 0; plyIdx < removePhaseOrder.size(); ++plyIdx)
+      {
+        plys.push_back(Ply(removePhaseOrder[plyIdx]));
+      }
+    }
+    const size_t removingPlys = plys.size() - addingPlys;
+    // Keep going until the board is empty.
+    for (size_t plyIdx = addingPlys; plyIdx < plys.size(); ++plyIdx)
+    {
+      DoPly(plys[plyIdx], &state);
+      stateStack.push_back(state);
+    }
+    // Red hand empty.
+    {
+      EXPECT_TRUE(PlayerEmptyHand(state.red));
+      const int redRemovals = (removingPlys + 1) / 2;
+      EXPECT_EQ(-redRemovals, state.red.remain);
+    }
+    // Blue hand empty.
+    {
+      EXPECT_TRUE(PlayerEmptyHand(state.blue));
+      const int blueRemovals = removingPlys / 2;
+      EXPECT_EQ(-blueRemovals, state.blue.remain);
+    }
     // Reversible.
     for (size_t plyIdx = plys.size(); plyIdx > 0; --plyIdx)
     {
-      ASSERT_EQ(stateStack[plyIdx], state);
+      EXPECT_EQ(stateStack[plyIdx], state);
       UndoPly(plys[plyIdx - 1], &state);
-      ASSERT_EQ(stateStack[plyIdx - 1], state);
-      ASSERT_NE(stateStack[plyIdx], state);
-    }
-    // Remove state same as reversing only players swapped.
-    std::vector<State> stateStackRemoving;
-    for (size_t stateIdx = 0; stateIdx < stateStack.size(); ++ stateIdx)
-    {
-      stateStackRemoving.push_back(stateStack[stateIdx]);
-      State& updateState = stateStackRemoving.back();
-      ASSERT_EQ(State::Phase_Adding, updateState.phase);
-      updateState.phase = State::Phase_Removing;
-      std::swap(updateState.red, updateState.blue);
-    }
-    state = stateStackRemoving.back();
-    // Reversible.
-    for (size_t plyIdx = plys.size(); plyIdx > 0; --plyIdx)
-    {
-      ASSERT_EQ(stateStackRemoving[plyIdx], state);
       DoPly(plys[plyIdx - 1], &state);
-      ASSERT_EQ(stateStackRemoving[plyIdx - 1], state);
-      ASSERT_NE(stateStackRemoving[plyIdx], state);
+      EXPECT_EQ(stateStack[plyIdx], state);
+      UndoPly(plys[plyIdx - 1], &state);
+      EXPECT_EQ(stateStack[plyIdx - 1], state);
+      EXPECT_NE(stateStack[plyIdx], state);
     }
   }
 }
@@ -232,8 +256,8 @@ TEST(Torque, NoTippingComponents)
     SCOPED_TRACE("Default board torque");
     Board board;
     InitBoard(&board);
-    ASSERT_EQ(TorqueL(board), -6);
-    ASSERT_EQ(TorqueR(board), 6);
+    EXPECT_EQ(TorqueL(board), -6);
+    EXPECT_EQ(TorqueR(board), 6);
   }
   // Some random board torques.
   {

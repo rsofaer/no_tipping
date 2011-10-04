@@ -25,7 +25,7 @@ struct RandomPlayOrderGenerator
 
 bool PlayerEmptyHand(const hps::Player& player)
 {
-  if (0 != player.remain)
+  if (player.remain > 0)
   {
     return false;
   }

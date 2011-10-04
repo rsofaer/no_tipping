@@ -8,6 +8,7 @@
 #include <iostream>
 #include <map>
 #include <limits>
+#include <cstring>
 #include <assert.h>
 
 namespace hps
@@ -19,16 +20,22 @@ typedef int Weight;
 // Default game parameters.
 namespace detail
 {
+
 enum { Board_Size = 15, };
 enum { Board_PivotL = -3, };
 enum { Board_PivotR = -1, };
 enum { Board_BoardWeight = 3, };
 enum { Player_NumWeights = 7, };
+const int Board_InitWeightPairs[][2] = { {-4, 3} };
+enum { Board_InitWeights = sizeof(Board_InitWeightPairs) /
+                           sizeof(Board_InitWeightPairs[0]), };
 template <int BoardWeight_, int PivotL_, int PivotR_, int Size_>
 struct GenericBoard;
 template <int NumWeights_>
 struct GenericPlayer;
-}
+
+} // end ns detail
+
 typedef detail::GenericBoard<detail::Board_BoardWeight,
                              detail::Board_PivotL,
                              detail::Board_PivotR,
@@ -126,7 +133,7 @@ inline void ClearBoard(BoardType* board)
   memset(board->positions, BoardType::Empty, sizeof(board->positions));
 }
 
-}
+} // end ns detail
 
 /// <summary> A game state. Consists of board and players. </summary>
 struct State
@@ -142,13 +149,17 @@ struct State
   {
     Phase_Adding = 0,
     Phase_Removing,
+    Phase_Count,
   };
+
+  enum { NumRemoved = (2 * Player::NumWeights) + detail::Board_InitWeights, };
 
   Board board;
   Player red;
   Player blue;
   Turn turn;
   Phase phase;
+  Weight removed[NumRemoved];
 };
 
 /// <summary> Get the current player from the state. </summary>
@@ -184,7 +195,11 @@ inline void InitBoard(Board* board)
   assert(board);
   ClearBoard(board);
   // Set the initial weight on the board.
-  (*board)[-4] = 3;
+  for (int pairIdx = 0; pairIdx < detail::Board_InitWeights; ++pairIdx)
+  {
+    const int* pair = detail::Board_InitWeightPairs[pairIdx];
+    (*board)[pair[0]] = pair[1];
+  }
 }
 
 /// <summary> Initialize state to game defaults. </summary>
@@ -196,6 +211,7 @@ inline void InitState(State* state)
   InitPlayer(&state->blue);
   state->turn = State::Turn_Red;
   state->phase = State::Phase_Adding;
+  memset(state->removed, Board::Empty, sizeof(state->removed));
 }
 
 /// <summary> Unexplored move that will spawn a new state. </summary>
@@ -204,14 +220,21 @@ inline void InitState(State* state)
 ///     the state is not copied for performance reasons. Note that all plys
 ///     are easily reversible. This property is ideal for tree traversal.
 ///   </para>
+///   <para> Plys during the removal phase have no associated weight index
+///     since they are not placed back into the player hand.
+///   </para>
 /// </remarks>
 struct Ply
 {
+  // Default constructor for stl containers.
   Ply()
     : pos(std::numeric_limits<int>::min()),
-      wIdx(std::numeric_limits<Weight>::min())
+      wIdx(std::numeric_limits<int>::min())
   {}
+  // Constructor for adding phase.
   Ply(const int pos_, const int wIdx_) : pos(pos_), wIdx(wIdx_) {}
+  // Constructor for removing phase.
+  Ply(const int pos_) : pos(pos_), wIdx(std::numeric_limits<int>::min()) {}
   int pos;
   int wIdx;
 };
@@ -230,6 +253,35 @@ int Torque(const BoardType& board)
   }
   return torque;
 }
+
+template <typename BoardType>
+inline bool Tipped(const BoardType& board)
+{
+  return (Torque<BoardType::PivotL>(board) > 0) ||
+         (Torque<BoardType::PivotR>(board) < 0);
+}
+
+} // end ns detail
+
+/// <summary> Compute torque around left pivot. </summary>
+inline int TorqueL(const Board& board)
+{
+  return detail::Torque<Board::PivotL, Board>(board);
+}
+
+/// <summary> Compute torque around right pivot. </summary>
+inline int TorqueR(const Board& board)
+{
+  return detail::Torque<Board::PivotR, Board>(board);
+}
+
+inline bool Tipped(const Board& board)
+{
+  return (TorqueL(board) > 0) || (TorqueR(board) < 0);
+}
+
+namespace detail
+{
 
 /// <summary> Find all plys from a given state. </summary>
 /// <remarks>
@@ -319,51 +371,53 @@ inline void PlyMutateState(const Ply& ply, State* state)
   Player* player = CurrentPlayer(state);
   Weight* hand = player->hand;
   assert(state);
+  const bool adding = (State::Phase_Adding == state->phase);
   if (PhaseOp()(State::Phase_Adding, state->phase))
   {
     assert(Board::Empty == state->board[ply.pos]);
-    assert(Player::Played != hand[ply.wIdx]);
-    // Update the board.
-    state->board[ply.pos] = hand[ply.wIdx];
-    hand[ply.wIdx] = Player::Played;
-    --player->remain;
+    if (adding)
+    {
+      // Update the board.
+      state->board[ply.pos] = hand[ply.wIdx];
+      // Update hand.
+      hand[ply.wIdx] = Player::Played;
+      --player->remain;
+    }
+    else
+    {
+      ++player->remain;
+      const int removeIdx = abs(state->red.remain + state->blue.remain);
+      assert(removeIdx >= 0);
+      assert(removeIdx < State::NumRemoved);
+      // Update the board.
+      state->board[ply.pos] = state->removed[removeIdx];
+      // Update removed;
+      state->removed[removeIdx] = Board::Empty;
+    }
   }
   else
   {
     assert(Board::Empty != state->board[ply.pos]);
-    assert(Player::Played == hand[ply.wIdx]);
+    // Update hand.
+    if (adding)
+    {
+      hand[ply.wIdx] = state->board[ply.pos];
+      ++player->remain;
+    }
+    else
+    {
+      const int removeIdx = abs(state->red.remain + state->blue.remain);
+      assert(removeIdx >= 0);
+      assert(removeIdx < State::NumRemoved);
+      state->removed[removeIdx] = state->board[ply.pos];
+      --player->remain;
+    }
     // Update the board.
-    hand[ply.wIdx] = state->board[ply.pos];
     state->board[ply.pos] = Board::Empty;
-    ++player->remain;
   }
 }
 
-template <typename BoardType>
-inline bool Tipped(const BoardType& board)
-{
-  return (Torque<BoardType::PivotL>(board) > 0) ||
-         (Torque<BoardType::PivotR>(board) < 0);
-}
-
-}
-
-/// <summary> Compute torque around left pivot. </summary>
-inline int TorqueL(const Board& board)
-{
-  return detail::Torque<Board::PivotL>(board);
-}
-
-/// <summary> Compute torque around right pivot. </summary>
-inline int TorqueR(const Board& board)
-{
-  return detail::Torque<Board::PivotR>(board);
-}
-
-inline bool Tipped(const Board& board)
-{
-  return (TorqueL(board) > 0) || (TorqueR(board) < 0);
-}
+} // end ns detail
 
 /// <summary> Discover all non suicidal plys from a given state. </summary>
 inline void PossiblePlys(const State& state, std::vector<Ply>* plys)
@@ -392,6 +446,17 @@ inline void DoPly(const Ply& ply, State* state)
     ++reinterpret_cast<int&>(turn);
     reinterpret_cast<int&>(turn) %= State::Turn_Count;
   }
+  // If both hands are empty, switch the phase.
+  {
+    const bool redEmpty = (0 == state->red.remain);
+    const bool blueEmpty = (0 == state->blue.remain);
+    if (redEmpty && blueEmpty)
+    {
+      State::Phase& phase = state->phase;
+      ++reinterpret_cast<int&>(phase);
+      reinterpret_cast<int&>(phase) %= State::Phase_Count;
+    }
+  }
 }
 
 /// <summary> Revserse the ply and get the resulting state. </summary>
@@ -400,6 +465,17 @@ inline void DoPly(const Ply& ply, State* state)
 ///   </para>
 inline void UndoPly(const Ply& ply, State* state)
 {
+  // If both hands are empty, switch the phase.
+  {
+    const bool redEmpty = (0 == state->red.remain);
+    const bool blueEmpty = (0 == state->blue.remain);
+    if (redEmpty && blueEmpty)
+    {
+      State::Phase& phase = state->phase;
+      ++reinterpret_cast<int&>(phase);
+      reinterpret_cast<int&>(phase) %= State::Phase_Count;
+    }
+  }
   // Swap the active player.
   {
     State::Turn& turn = state->turn;
