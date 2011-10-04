@@ -16,11 +16,15 @@ namespace ntg
 
 void BuildState(std::string command,State& stateBuffer)
 {
+  std::cout << "Building state\n";
     std::string curLine;
     std::stringstream ss(command);
     int redWeightsRemaining=0;
     int blueWeightsRemaining=0;
     getline(ss, curLine);
+
+    std::cout << curLine << "\n";
+
     if(curLine == "ADDING")
     {
         stateBuffer.phase = State::Phase_Adding;
@@ -32,6 +36,7 @@ void BuildState(std::string command,State& stateBuffer)
     
     while(getline(ss, curLine))
     {
+      std::cout << curLine << "\n";
         std::stringstream sstream(curLine);
         int onBoard;
         int position;

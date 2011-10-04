@@ -18,6 +18,7 @@ class Contestant extends NoTippingPlayer
     	} 
 	catch (Exception ev) 
 	{
+    System.out.println("Error in calculateMove");
 	    System.out.println(ev.getMessage());
 	}
 	return move;			

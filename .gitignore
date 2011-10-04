@@ -4,4 +4,4 @@ CMakeFiles/
 CMakeScripts/
 cmake_install.cmake
 ntg.xcodeproj/
-
+*.class
