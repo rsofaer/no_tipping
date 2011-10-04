@@ -337,7 +337,7 @@ public:
     typedef std::binder2nd<RightPivotOp> BoundRightPivotOp;
     const BoundLeftPivotOp exclL = std::bind2nd(LeftPivotOp(), 0);
     const BoundRightPivotOp exclR = std::bind2nd(RightPivotOp(), 0);
-    const CombineOp combineOp;
+    CombineOp combineOp;
     // Removing phase just uses whatever is on the board.
     if (State::Phase_Removing == state.phase)
     {

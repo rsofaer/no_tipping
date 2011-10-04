@@ -4,6 +4,9 @@
 #include <string>
 #include <sstream>
 #include <cstring>
+#include "minimax.h"
+#include "adversarial_utils.h"
+
 
 
 namespace hps
@@ -11,7 +14,7 @@ namespace hps
 namespace ntg
 {
 
-std::string CalculateMove(std::string command,State& stateBuffer)
+void BuildState(std::string command,State& stateBuffer)
 {
   std::string curLine;
   std::stringstream ss(command);
@@ -74,15 +77,27 @@ std::string CalculateMove(std::string command,State& stateBuffer)
       assert(false); 
     }
   }
-  std::string calculatedMove;//=call to minimax.
-  return calculatedMove;
 }
 
 std::string CalculateMoveWrapper(std::string command)
 {
   State stateBuffer; // get Statebuffer's previous states from a method that has saved it.
   //CalculateMove gets called on every move of the opponent, maintain a state somewhere and get it back.
-  return CalculateMove(command,stateBuffer);
+  BuildState(command,stateBuffer);
+    Minimax::Params params;
+    {
+        params.maxDepthAdding = 3;
+        params.maxDepthRemoving = 5;
+    }
+
+    BoardEvaluationInverseDepthWinStates evalFunc;
+    Ply ply;
+    Minimax::Run(&params, &stateBuffer, &evalFunc, &ply);
+    int position = ply.pos;
+    int weight = CurrentPlayer(&stateBuffer)->hand[ply.wIdx];
+    std::stringstream ss;
+    ss << position << " " << weight;
+    return ss.str();
 }
 
 }
