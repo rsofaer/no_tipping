@@ -23,6 +23,9 @@ void BuildState(std::string command,State& stateBuffer)
   int position;
   std::string color;
   int weight;
+  
+  int redWeightsRemaining = 0;
+  int blueWeightsRemaining = 0;
 
   getline(ss, curLine);
 
@@ -67,16 +70,27 @@ void BuildState(std::string command,State& stateBuffer)
     if(color == "Red")
     {
       stateBuffer.red.hand[weight-1] = weight;
+      redWeightsRemaining++;
     }
     else if(color == "Blue")
     {
       stateBuffer.blue.hand[weight-1] = weight;
+      blueWeightsRemaining++;
     } 
     else 
     { 
       assert(false); 
     }
   }
+  
+  if(redWeightsRemaining == blueWeightsRemaining){
+    //Red's turn
+    stateBuffer.turn = State::Turn_Red;
+  } else if(blueWeightsRemaining > redWeightsRemaining)
+  {
+    //Blue's turn
+    stateBuffer.turn = State::Turn_Blue;
+  } else { assert(false); }
 }
 
 std::string CalculateMoveWrapper(std::string command)
@@ -90,7 +104,7 @@ std::string CalculateMoveWrapper(std::string command)
         params.maxDepthRemoving = 5;
     }
 
-    BoardEvaluationInverseDepthWinStates evalFunc;
+    BoardEvaluationInverseDepthWinStates evalFunc(stateBuffer.turn);
     Ply ply;
     Minimax::Run(&params, &stateBuffer, &evalFunc, &ply);
     int position = ply.pos;

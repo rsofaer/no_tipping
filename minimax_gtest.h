@@ -76,7 +76,7 @@ TEST(Minimax, Minimax)
   }
   std::cout << "maxDepthAdding: " << params.maxDepthAdding << std::endl;
   std::cout << "maxDepthRemoving: " << params.maxDepthRemoving << std::endl;
-  BoardEvaluationInverseDepthWinStates evalFunc;
+  BoardEvaluationInverseDepthWinStates evalFunc(State::Turn_Red);
   Ply ply;
   int minimax = Minimax::Run(&params, &state, &evalFunc, &ply);
   std::cout << "Minimax is " << minimax << " with ply (position: " << ply.pos

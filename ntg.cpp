@@ -31,7 +31,7 @@ int main(int /*argc*/, char** /*argv*/)
   {
     State state;
     InitState(&state);
-    BoardEvaluationInverseDepthWinStates evalFunc;
+    BoardEvaluationInverseDepthWinStates evalFunc(State::Turn_Red);
     evalFunc(state);
   }
   return 0;

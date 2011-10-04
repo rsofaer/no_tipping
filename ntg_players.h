@@ -10,38 +10,9 @@ namespace hps
 namespace ntg
 {
 
-/// <summary> Function to assist in choosing a losing move. </summary>
-void AnyPlyWillDo(State* state, Ply* ply)
-{
-  assert(state);
-  // Find open board space.
-  for (int pos = -Board::Size; pos <= Board::Size; ++pos)
-  {
-    if (Board::Empty != state->board[pos])
-    {
-      *ply = Ply(pos);
-      break;
-    }
-  }
-  // when adding, find a weight to place.
-  if (State::Phase_Adding == state->phase)
-  {
-    // Take anything from our hand.
-    const Player* player = CurrentPlayer(state);
-    for (int wIdx = 0; wIdx < Player::NumWeights; ++wIdx)
-    {
-      if (Player::Played != player->hand[wIdx])
-      {
-        ply->wIdx = wIdx;
-        break;
-      }
-    }
-  }
-}
-
 struct RandomPlayer
 {
-  RandomPlayer() : plys() {}
+  RandomPlayer(const State::Turn) : plys() {}
 
   /// <summary> Return next ply without mutating the state. </summary>
   void NextPly(State* state, Ply* ply)
@@ -72,12 +43,12 @@ struct RandomPlayer
 
 struct MinimaxPlayer
 {
-  MinimaxPlayer()
+  MinimaxPlayer(const State::Turn who)
     : params(),
-      evalFunc()
+      evalFunc(who)
   {
 #ifndef NDEBUG
-    params.maxDepthAdding = 2;
+    params.maxDepthAdding = 3;
     params.maxDepthRemoving = 3;
     //params.maxDepthRemoving = std::numeric_limits<int>::max();
 #else
@@ -94,19 +65,9 @@ struct MinimaxPlayer
     assert(!Tipped(state->board));
 
     // Get the minimax move.
-    int minimax = Minimax::Run(&params, state, &evalFunc, ply);
-    if (ply->pos < -Board::Size)
-    {
-      bool why = true;
-    }
-    if (std::numeric_limits<int>::min() == minimax)
-    {
-      bool lost = true;
-    }
-    if (std::numeric_limits<int>::min() == minimax)
-    {
-      AnyPlyWillDo(state, ply);
-    }
+    Minimax::Run(&params, state, &evalFunc, ply);
+    assert(ply->pos >= -Board::Size);
+    assert(ply->pos <= Board::Size);
   }
 
   Minimax::Params params;

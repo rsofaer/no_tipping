@@ -1,4 +1,5 @@
 #include "ntg_gtest.h"
+#include "libntgjni_gtest.h"
 #include "minimax_gtest.h"
 #include "game_gtest.h"
 #include "gtest/gtest.h"
