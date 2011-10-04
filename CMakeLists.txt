@@ -15,7 +15,7 @@ target_link_libraries(no_tipping_game ntg)
 project(ntgjni)
 find_package(JNI REQUIRED)
 set(SRCS
-    "ntgjni.cpp")
+    "libntgjni.cpp")
 include_directories(${JNI_INCLUDE_DIRS})
 add_library(ntgjni SHARED ${SRCS} ${HEADERS})
 target_link_libraries(ntgjni ntg ${JNI_LIBRARIES})

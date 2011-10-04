@@ -5,3 +5,6 @@ CMakeScripts/
 cmake_install.cmake
 ntg.xcodeproj/
 *.class
+tags
+game_notes.txt
+*.jar
