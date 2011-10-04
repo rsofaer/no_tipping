@@ -1,27 +1,45 @@
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.BufferedReader;
+import java.io.IOException;
 class Contestant extends NoTippingPlayer 
 {
-    private LibNtgJni libNtgJni = null;
-    private int N=0;
     public Contestant(int port) 
     {
 	super(port);
-	libNtgJni = new LibNtgJni();
     }
     protected String process(String command) 
     {
-	System.out.println("command received: "+command);
-	String move = null;
+	String move=null;
+	Runtime runTime = Runtime.getRuntime();
+	Process p = null;
+	String cmd[] = {"./no_tipping_game", command };
 	try 
 	{
-	   move = libNtgJni.calculateMove(command);
-	   System.out.println("Calculated move: "+ move);
-    	} 
-	catch (Exception ev) 
+	    p = runTime.exec(cmd);
+	    p.waitFor();
+	} 
+	catch (Exception e) 
 	{
-    System.out.println("Error in calculateMove");
-	    System.out.println(ev.getMessage());
+	    System.out.println("error executing " + cmd[0]);
 	}
-	return move;			
+	try
+	{
+	    InputStream in = p.getInputStream();
+	    InputStreamReader insr = new InputStreamReader(in);
+	    BufferedReader br = new BufferedReader(insr);
+	    String output;
+	    StringBuffer sb = new StringBuffer();
+	    while((output=br.readLine())!=null)
+	    {
+		sb.append(output+"\n");
+	    }
+	}
+	catch(IOException ex)
+	{
+	    System.out.println("Error reading the stream: "+ex.getMessage());
+	}
+	return move;
     }
 
     public static void main(String[] args) throws Exception 
@@ -29,12 +47,11 @@ class Contestant extends NoTippingPlayer
 	if(args.length==1)
 	{
 	    int port = Integer.parseInt(args[0]);
-	    System.out.println("port: "+port);
 	    new Contestant(port);
 	}
 	else
 	{
-	    System.out.println("Usage: Contestant.java <port-number> <N>");
+	    System.out.println("Usage: Contestant.java <port-number>");
 	}
     }
 }
