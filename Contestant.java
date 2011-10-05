@@ -18,8 +18,15 @@ class Contestant extends NoTippingPlayer
     {
       System.out.println("Running C++ program.");
       p = runTime.exec("./no_tipping_game");
+
+      String[] lines = command.split("\n");
       java.io.PrintWriter cppStdin = new java.io.PrintWriter(p.getOutputStream(), true);
-      cppStdin.print(command);
+      
+      for(String s : lines)
+        cppStdin.println(s);
+
+      cppStdin.println("STATE END");
+      
       System.out.println("Waiting for program to terminate.");
       p.waitFor();
     } 
