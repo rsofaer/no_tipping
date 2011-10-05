@@ -1,3 +1,4 @@
+
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.io.*;
@@ -22,11 +23,15 @@ public abstract class NoTippingPlayer {
         BufferedReader in = null;
         try {
             server = new ServerSocket(port);
+            System.out.println("calling accept");
             socket = server.accept();
+            System.out.println("setting nodelay");
             socket.setTcpNoDelay(true);
+            System.out.println("getting outputstream");
             out = new PrintWriter(socket.getOutputStream(), true);
+            System.out.println("getting inputstream");
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-
+            System.out.println("Accepting commands");
         } catch (IOException ev) {
             System.err.println(ev.getMessage());
         }
@@ -34,12 +39,13 @@ public abstract class NoTippingPlayer {
         StringBuffer state = new StringBuffer();
         try {
             while ((command = in.readLine())!= null) {
+                System.out.println(command);
                 if (command.equals("STATE END")) {
                     out.println(process(state.toString()));
                     state.delete(0, state.length());
                     continue;
                 }
-                state.append(command+";");
+                state.append(command+"\n");
             }
         }
         catch (IOException io) {

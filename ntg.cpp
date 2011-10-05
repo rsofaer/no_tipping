@@ -7,16 +7,15 @@
 
 using namespace hps;
 
-void BuildState(const std::string& command, State* stateBuffer)
+void BuildState(State* stateBuffer)
 {
-  std::cout << "Building state\n";
+  //std::cout << "Building state\n";
   std::string curLine;
-  std::stringstream ss(command);
   int redWeightsRemaining=0;
   int blueWeightsRemaining=0;
-  getline(ss, curLine);
+  getline(std::cin, curLine);
 
-  std::cout << curLine << "\n";
+  //std::cout << curLine << "\n";
 
   if(curLine == "ADDING")
   {
@@ -27,9 +26,14 @@ void BuildState(const std::string& command, State* stateBuffer)
     stateBuffer->phase = State::Phase_Removing;
   }
 
-  while(getline(ss, curLine))
+  while(getline(std::cin, curLine))
   {
-    std::cout << curLine << "\n";
+    //std::cout << curLine << "\n";
+    if(curLine == "STATE END")
+    {
+      return;
+    }
+
     std::stringstream sstream(curLine);
     int onBoard;
     int position;
@@ -79,11 +83,11 @@ void BuildState(const std::string& command, State* stateBuffer)
   } else { assert(false); }
 }
 
-std::string CalculateMoveWrapper(const std::string& command)
+std::string CalculateMoveWrapper()
 {
   State stateBuffer; // get Statebuffer's previous states from a method that has saved it.
   //CalculateMove gets called on every move of the opponent, maintain a state somewhere and get it back.
-  BuildState(command, &stateBuffer);
+  BuildState(&stateBuffer);
   Minimax::Params params;
   {
     params.maxDepthAdding = 3;
@@ -100,32 +104,10 @@ std::string CalculateMoveWrapper(const std::string& command)
   return ss.str();
 }
 
-/// <summary> Print the application help message to a stream. </summary>
-void PrintHelpMsg(std::ostream& out, const char* applicationName)
-{
-  out << "Usage: " << applicationName << " STATE_STRING" << std::endl;
-}
-
 int main(int argc, char** argv)
 {
-  if (argc < 2)
-  {
-    const std::string appNameLong = argv[0];
-    const std::string appName =
-#ifdef WIN32
-      appNameLong.substr(appNameLong.rfind('\\') + 1,
-                         std::string::npos);
-#else
-      appNameLong.substr(appNameLong.rfind('/') + 1,
-                         std::string::npos);
-#endif
-    PrintHelpMsg(std::cerr, appName.c_str());
-    return 1;
-  }
-
   // Get the string for the state.
-  const std::string strCommand(argv[1]);
-  std::cout << CalculateMoveWrapper(strCommand);;
+  std::cout << CalculateMoveWrapper() << "\n";
 
   return 0;
 }
