@@ -164,7 +164,7 @@ std::string CalculateMoveWrapper()
 int main(int argc, char** argv)
 {
   // Get the string for the state.
-  std::cout << CalculateMoveWrapper() << "\n";
+  std::cout << CalculateMoveWrapper() << std::endl;
 
   return 0;
 }
