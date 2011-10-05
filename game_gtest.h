@@ -1,6 +1,7 @@
 #ifndef _NO_TIPPING_GAME_GAME_GTEST_H_
 #define _NO_TIPPING_GAME_GAME_GTEST_H_
 #include "ntg_players.h"
+#include "ntg_gtest_operators.h"
 #include "gtest/gtest.h"
 
 namespace _no_tipping_game_game_gtest_h_
@@ -45,6 +46,7 @@ void LogWinner(const State& state)
   }
 }
 
+typedef std::map<Ply, int> PlyCountMap;
 template <typename RedPlayer, typename BluePlayer, int Trials>
 struct PlayerBattle
 {
@@ -70,7 +72,9 @@ struct PlayerBattle
         {
           blue.NextPly(&state, &ply);
         }
-        //PrintPly(ply, state, turns);
+        ASSERT_GE(ply.pos, static_cast<int>(-Board::Size));
+        ASSERT_LE(ply.pos, static_cast<int>(Board::Size));
+        PrintPly(ply, state, turns);
         DoPly(ply, &state);
         if (Tipped(state.board))
         {
@@ -85,31 +89,70 @@ struct PlayerBattle
 
 //TEST(RandomVsRandom, NoTippingGames)
 //{
-//  enum { RandomGames = 1000, };
+//  enum { Games = 100, };
+//  std::cout << "Playing " << Games << " games." << std::endl;
 //  int redWins;
-//  PlayerBattle<RandomPlayer, RandomPlayer, RandomGames>::Play(&redWins);
-//  const float redWinProportion = static_cast<float>(redWins) / RandomGames;
+//  PlayerBattle<RandomPlayer, RandomPlayer, Games>::Play(&redWins);
+//  std::cout << "Red won " << redWins << " times out of "
+//            << Games << " games." << std::endl;
+//  const float redWinProportion = static_cast<float>(redWins) / Games;
 //  EXPECT_NEAR(0.5f, redWinProportion, 0.05f);
 //}
 
-//TEST(RandomVsMiniMax, NoTippingGames)
+//TEST(RandomVsMonteCarlo, NoTippingGames)
 //{
-//  enum { Games = 1000, };
+//  enum { Games = 100, };
 //  int redWins;
-//  PlayerBattle<RandomPlayer, MinimaxPlayer, Games>::Play(&redWins);
+//  PlayerBattle<RandomPlayer, MonteCarloPlayer, Games>::Play(&redWins);
+//  std::cout << "Red won " << redWins << " times out of "
+//            << Games << " games." << std::endl;
 //  const float redWinProportion = static_cast<float>(redWins) / Games;
 //  EXPECT_NEAR(1.0f, redWinProportion, 0.01f);
 //}
 
-TEST(MiniMaxVsRandom, NoTippingGames)
+TEST(RandomVsMinimax, NoTippingGames)
+{
+  enum { Games = 10, };
+  int redWins;
+  PlayerBattle<RandomPlayer, MinimaxPlayer, Games>::Play(&redWins);
+  std::cout << "Red won " << redWins << " times out of "
+            << Games << " games." << std::endl;
+  const float redWinProportion = static_cast<float>(redWins) / Games;
+  EXPECT_NEAR(0.0f, redWinProportion, 0.01f);
+}
+
+TEST(MinimaxVsRandom, NoTippingGames)
 {
   enum { Games = 10, };
   int redWins;
   PlayerBattle<MinimaxPlayer, RandomPlayer, Games>::Play(&redWins);
-  std::cout << "Red won " << redWins << " times\n";
+  std::cout << "Red won " << redWins << " times out of "
+            << Games << " games." << std::endl;
   const float redWinProportion = static_cast<float>(redWins) / Games;
   EXPECT_NEAR(1.0f, redWinProportion, 0.01f);
 }
+
+//TEST(MinimaxVsMinimax, NoTippingGames)
+//{
+//  enum { Games = 10, };
+//  int redWins;
+//  PlayerBattle<MinimaxPlayer, MinimaxPlayer, Games>::Play(&redWins);
+//  std::cout << "Red won " << redWins << " times out of "
+//            << Games << " games." << std::endl;
+//  const float redWinProportion = static_cast<float>(redWins) / Games;
+//  EXPECT_NEAR(1.0f, redWinProportion, 0.01f);
+//}
+
+//TEST(MinimaxVsMonteCarlo, NoTippingGames)
+//{
+//  enum { Games = 10, };
+//  int redWins;
+//  PlayerBattle<MinimaxPlayer, MonteCarloPlayer, Games>::Play(&redWins);
+//  std::cout << "Red won " << redWins << " times out of "
+//            << Games << " games." << std::endl;
+//  const float redWinProportion = static_cast<float>(redWins) / Games;
+//  EXPECT_NEAR(1.0f, redWinProportion, 0.01f);
+//}
 
 }
 

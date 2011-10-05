@@ -53,7 +53,8 @@ struct MinimaxPlayer
     //params.maxDepthRemoving = std::numeric_limits<int>::max();
 #else
     params.maxDepthAdding = 4;
-    params.maxDepthRemoving = 6;
+    params.maxDepthRemoving = 5;
+    //params.maxDepthRemoving = 10;
 #endif
   }
 
@@ -72,6 +73,72 @@ struct MinimaxPlayer
 
   Minimax::Params params;
   BoardEvaluationInverseDepthWinStates evalFunc;
+};
+
+struct MonteCarloPlayer
+{
+  MonteCarloPlayer(const State::Turn who_) : who(who_), plyCountMap() {}
+
+  /// <summary> Return next ply without mutating the state. </summary>
+  void NextPly(const State* state, Ply* ply)
+  {
+    assert(state);
+    assert(ply);
+    assert(!Tipped(state->board));
+
+    // Simulate.
+    plyCountMap.clear();
+    for (int trial = 0; trial < 1000; ++trial)
+    {
+      State modifyState = *state;
+      // Players.
+      RandomPlayer me(who);
+      State::Turn other = who;
+      NextTurn(&other);
+      RandomPlayer you(other);
+      // Get first ply.
+      Ply firstPly;
+      {
+        me.NextPly(&modifyState, &firstPly);
+      }
+      *ply = firstPly;
+      DoPly(*ply, &modifyState);
+      while (!Tipped(modifyState.board))
+      {
+        if (who == modifyState.turn)
+        {
+          me.NextPly(&modifyState, ply);
+        }
+        else
+        {
+          you.NextPly(&modifyState, ply);
+        }
+        DoPly(*ply, &modifyState);
+      }
+      // Did I win?
+      if (who == modifyState.turn)
+      {
+        ++plyCountMap[firstPly];
+      }
+    }
+    // Gather best ply.
+    int maxCount = std::numeric_limits<int>::min();
+    for (PlyCountMap::const_iterator plyCount = plyCountMap.begin();
+         plyCount != plyCountMap.end();
+         ++plyCount)
+    {
+      if (plyCount->second > maxCount)
+      {
+        maxCount = plyCount->second;
+        *ply = plyCount->first;
+      }
+    }
+  }
+
+  State::Turn who;
+
+  typedef std::map<Ply, int> PlyCountMap;
+  PlyCountMap plyCountMap;
 };
 
 }

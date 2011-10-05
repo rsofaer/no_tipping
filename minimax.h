@@ -10,137 +10,258 @@ namespace ntg
 
 struct Minimax
 {
+  /// <summary> Helper struct to pass for thread-level processing. </summary>
+  struct ThreadParams
+  {
+    ThreadParams()
+      : state(),
+        depth(-1),
+        maxDepth(-1),
+        bestMinimax(0),
+        bestPlyIdx(-1),
+        dfsPlys(State::NumRemoved + (2 * Player::NumWeights) - 2)
+    {}
+
+    State state;
+    int depth;
+    int maxDepth;
+    int bestMinimax;
+    int bestPlyIdx;
+    std::vector<std::vector<Ply> > dfsPlys;
+  };
+
+  /// <summary> The parallel minimax parameters. </summary>
   struct Params
   {
     Params()
       : maxDepthAdding(3),
         maxDepthRemoving(8),
         depth(0),
-        plys(State::NumRemoved + (2 * Player::NumWeights) - 1)
+        rootPlys(),
+        threadData()
     {}
+
     int maxDepthAdding;
     int maxDepthRemoving;
     int depth;
-    std::vector<std::vector<Ply> > plys;
+    std::vector<Ply> rootPlys;
+    std::vector<ThreadParams> threadData;
   };
 
-  template <typename MinimaxFunc, typename BoardEvaulationFunction>
-  static void MinimaxChildrenHelper(Params* params,
-                                    State* state,
-                                    std::vector<Ply>::const_iterator testPly,
-                                    std::vector<Ply>::const_iterator endPly,
-                                    BoardEvaulationFunction* evalFunc,
-                                    Ply* ply,
-                                    int* minimax)
-  {
-    assert(params && state && evalFunc && ply && minimax);
-    // Score all plys to find minimax.
-    MinimaxFunc minimaxFunc;
-    // Parallelize the first level.
-//    if (1 == params->depth)
-//    {
-//    }
-//    else
-    {
-      for (; testPly != endPly; ++testPly)
-      {
-        DoPly(*testPly, state);
-        Ply tossPly;
-        int score = Run(params, state, evalFunc, &tossPly);
-        if (minimaxFunc(score, *minimax))
-        {
-          *minimax = score;
-          *ply = *testPly;
-        }
-        UndoPly(*testPly, state);
-      }
-    }
-  }
-
+  /// <summary> Run Minimax to get the ply for the state. </summary>
   template <typename BoardEvaulationFunction>
   static int Run(Params* params,
                  State* state,
-                 BoardEvaulationFunction* evalFunc,
+                 const BoardEvaulationFunction* evalFunc,
                  Ply* ply)
   {
     assert(params && state && evalFunc && ply);
+
     int maxDepth = params->maxDepthAdding;
+    int& depth = params->depth;
+    // See if we are at the end of the adding phase.
     bool completedAddingPhase = false;
     int removingDepth = -1;
     {
+      // Are the weight sums ahead of or with the depth?
       const int remainSum = state->red.remain + state->blue.remain;
-      if ((remainSum <= 0) && (-remainSum >= params->depth))
+      if ((remainSum <= 0) && (-remainSum >= depth))
       {
         maxDepth = params->maxDepthRemoving;
         completedAddingPhase = true;
-        removingDepth = -remainSum - params->depth + 1;
+        removingDepth = -remainSum - depth + 1;
       }
     }
     assert(maxDepth > 1);
-    assert(params->depth < maxDepth);
-    ++params->depth;
+    assert(depth < maxDepth);
+    ++depth;
+
     // Get the children of the current state.
-    std::vector<Ply>& plys = params->plys[params->depth - 1];
+    std::vector<Ply>& plys = params->rootPlys;
     plys.clear();
     PossiblePlys(*state, &plys);
     // A leaf has no non-suicidal moves. Who won?
     int minimax;
     if (0 == plys.size())
     {
-      AnyPlyWillDo(state, ply);
-      if (params->depth & 1)
-      {
-        // I have no moves, so I lose.
-        minimax = std::numeric_limits<int>::min();
-      }
-      else
-      {
-        // You have no moves, so you lose.
-        minimax = std::numeric_limits<int>::max();
-      }
-      --params->depth;
-      return minimax;
+      minimax = ScoreLeaf(depth, state, ply);
     }
-    // If depth bound reached, return score current state.
-    if (maxDepth == params->depth)
-    {
-      --params->depth;
-      return (*evalFunc)(*state);
-    }
-    // Init score.
-    std::vector<Ply>::const_iterator testPly = plys.begin();
-    {
-      *ply = *testPly;
-      DoPly(*ply, state);
-      Ply tossPly;
-      minimax = Run(params, state, evalFunc, &tossPly);
-      UndoPly(*ply, state);
-    }
-    // If I am MAX, then maximize my score. If I am MIN then minimize it.
-    // I am MAX?
-    if (params->depth & 1)
-    {
-      MinimaxChildrenHelper<std::greater<int> >(params, state,
-                                                ++testPly, plys.end(),
-                                                evalFunc, ply, &minimax);
-    }
-    // I am MIN.
     else
     {
-      MinimaxChildrenHelper<std::less<int> >(params, state,
-                                                ++testPly, plys.end(),
-                                             evalFunc, ply, &minimax);
+      // Setup threads.
+      std::vector<ThreadParams>& threadData = params->threadData;
+      {
+        const int numProcs = omp_get_num_procs();
+        threadData.resize(numProcs);
+        int initMinimax = std::numeric_limits<int>::min();
+        for (int threadIdx = 0; threadIdx < numProcs; ++threadIdx)
+        {
+          ThreadParams& threadParams = threadData[threadIdx];
+          {
+            threadParams.bestMinimax = initMinimax;
+            threadParams.bestPlyIdx = -1;
+            threadParams.depth = depth;
+            threadParams.maxDepth = maxDepth;
+            threadParams.state = *state;
+          }
+        }
+      }
+      // Parallelize the first level.
+#pragma omp parallel for
+      for (int plyIdx = 0; plyIdx < static_cast<int>(plys.size()); ++plyIdx)
+      {
+        const int threadIdx = omp_get_thread_num();
+        ThreadParams& threadParams = threadData[threadIdx];
+        // Apply the ply for this state.
+        Ply& mkChildPly = plys[plyIdx];
+        DoPly(mkChildPly, &threadParams.state);
+        // Run on the subtree.
+        const int minimax = RunThread(&threadParams, evalFunc);
+        // Undo the ply for the next worker.
+        UndoPly(mkChildPly, &threadParams.state);
+        // Collect best minimax for this thread.
+        if ((-1 == threadParams.bestPlyIdx) ||
+            (minimax > threadParams.bestMinimax))
+        {
+          threadParams.bestMinimax = minimax;
+          threadParams.bestPlyIdx = plyIdx;
+        }
+      }
+      // Gather best result from all threads.
+      {
+        int bestPlyIdx;
+        GatherRunThreadResults<std::greater<int> >(threadData,
+                                                   &minimax, &bestPlyIdx);
+        // Set minimax ply.
+        *ply = plys[bestPlyIdx];
+      }
     }
-    --params->depth;
+
+    --depth;
     // reissb -- 20111004 -- Try to increse search as the search space
     //   decreases. This is becuase there are less moves further down
     //   the tree.
-    if (completedAddingPhase && (0 == params->depth))
+    if (completedAddingPhase && (0 == depth))
     {
-      params->maxDepthRemoving += (0 == params->depth) * (removingDepth * 2);
-      std::cout << "Increased depth to " << params->maxDepthRemoving
-                << " from " << maxDepth << "." << std::endl;
+      params->maxDepthRemoving += (removingDepth * 2);
+//      std::cout << "Increased depth to " << params->maxDepthRemoving
+//                << " from " << maxDepth << "." << std::endl;
     }
+    return minimax;
+  }
+
+private:
+  inline static bool IdentifyMax(const int depth)
+  {
+    return depth & 1;
+  }
+
+  inline static int ScoreLeaf(const int depth, State* state, Ply* ply)
+  {
+    AnyPlyWillDo(state, ply);
+    if (IdentifyMax(depth))
+    {
+      // I have no moves, so I lose.
+      return std::numeric_limits<int>::min();
+    }
+    else
+    {
+      // You have no moves, so you lose.
+      return std::numeric_limits<int>::max();
+    }
+  }
+
+  template <typename MinimaxFunc>
+  static void GatherRunThreadResults(const std::vector<ThreadParams>& data,
+                                     int* minimax, int* bestPlyIdx)
+  {
+    std::vector<ThreadParams>::const_iterator result = data.begin();
+    *minimax = result->bestMinimax;
+    *bestPlyIdx = result->bestPlyIdx;
+    MinimaxFunc minimaxFunc;
+    for (; result < data.end(); ++result)
+    {
+      if (minimaxFunc(result->bestMinimax, *minimax))
+      {
+        *minimax = result->bestMinimax;
+        *bestPlyIdx = result->bestPlyIdx;
+      }
+    }
+  }
+
+  template <typename MinimaxFunc, typename BoardEvaulationFunction>
+  static void MinimaxChildrenHelper(ThreadParams* params,
+                                    std::vector<Ply>::const_iterator testPly,
+                                    std::vector<Ply>::const_iterator endPly,
+                                    const BoardEvaulationFunction* evalFunc,
+                                    int* minimax)
+  {
+    assert(params && evalFunc);
+
+    State* state = &params->state;
+    // Score all plys to find minimax.
+    MinimaxFunc minimaxFunc;
+    for (; testPly != endPly; ++testPly)
+    {
+      DoPly(*testPly, state);
+      int score = RunThread(params, evalFunc);
+      if (minimaxFunc(score, *minimax))
+      {
+        *minimax = score;
+      }
+      UndoPly(*testPly, state);
+    }
+  }
+
+  template <typename BoardEvaulationFunction>
+  static int RunThread(ThreadParams* params,
+                       const BoardEvaulationFunction* evalFunc)
+  {
+    int& depth = params->depth;
+    const int& maxDepth = params->maxDepth;
+    State* state = &params->state;
+    assert(depth < maxDepth);
+    ++depth;
+
+    // Get the children of the current state.
+    std::vector<Ply>& plys = params->dfsPlys[params->depth - 2];
+    plys.clear();
+    PossiblePlys(*state, &plys);
+    // Is this a leaf?
+    int minimax;
+    if (0 == plys.size())
+    {
+      Ply tossPly;
+      minimax = ScoreLeaf(depth, state, &tossPly);
+    }
+    // If depth bound reached, return score current state.
+    else if (maxDepth == depth)
+    {
+      minimax = (*evalFunc)(*state);
+    }
+    else
+    {
+      // Init score.
+      std::vector<Ply>::const_iterator testPly = plys.begin();
+      {
+        DoPly(*testPly, state);
+        minimax = RunThread(params, evalFunc);
+        UndoPly(*testPly, state);
+      }
+      // If I am MAX, then maximize my score.
+      if (IdentifyMax(depth))
+      {
+        MinimaxChildrenHelper<std::greater<int> >(params, ++testPly, plys.end(),
+                                                  evalFunc, &minimax);
+      }
+      // I am MIN. Minimize it.
+      else
+      {
+        MinimaxChildrenHelper<std::less<int> >(params, ++testPly, plys.end(),
+                                               evalFunc, &minimax);
+      }
+    }
+    --depth;
     return minimax;
   }
 };

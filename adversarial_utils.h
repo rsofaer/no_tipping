@@ -216,7 +216,7 @@ struct BoardEvaluationInverseDepthWinStates
   }
 
   /// <summary> Count blue win states reachable from the given board. </summary>
-  int BlueWinStatesReachable(const Board& board)
+  int BlueWinStatesReachable(const Board& board) const
   {
     int count = 0;
     // Find all blue win states included in the board.
@@ -231,9 +231,10 @@ struct BoardEvaluationInverseDepthWinStates
   }
 
   /// <summary> Count red win states reachable from the given board. </summary>
-  int RedWinStatesReachable(const Board& board)
+  int RedWinStatesReachable(const Board& board) const
   {
     // Find all red win states included in the board.
+    std::vector<BoardPosWeight> bpws;
     bpws.clear();
     bpws.reserve(Board::Positions);
     int p = -Board::Size;
@@ -264,7 +265,8 @@ struct BoardEvaluationInverseDepthWinStates
       const BoardPosWeight& first = bpws[cmb[0]];
       if (redWinsBoardMap.count(first) > 0)
       {
-        const std::vector<BoardPosWeight>& scndList = redWinsBoardMap[first];
+        const std::vector<BoardPosWeight>& scndList =
+          redWinsBoardMap.find(first)->second;
         const BoardPosWeight& second = bpws[cmb[1]];
         std::vector<BoardPosWeight>::const_iterator pairScnd =
           std::lower_bound(scndList.begin(), scndList.end(), second);
@@ -277,8 +279,7 @@ struct BoardEvaluationInverseDepthWinStates
   BoardEvaluationInverseDepthWinStates(const State::Turn who_)
     : who(who_),
       blueWinsBoardMap(),
-      redWinsBoardMap(),
-      bpws()
+      redWinsBoardMap()
   {
     // Get states where blue wins.
     {
@@ -339,21 +340,22 @@ struct BoardEvaluationInverseDepthWinStates
     }
   }
 
-  float randScalar()
+  float RandScale() const
   {
-    float bound = (float) RandBound(4);
-    bound = bound/5;
-    bound = bound + 0.9;
-    return bound;
+    int base = RandBound(101);
+    float frac = static_cast<float>(base) / 100.0f;
+    return frac * 10.0f;
   }
   
   /// <summary> Score a board. </summary>
-  int operator()(const State& state)
+  int operator()(const State& state) const
   {
     assert(!Tipped(state.board));
     // Count win states reachable.
     const int redWinStatesReachable = RedWinStatesReachable(state.board);
     const int blueWinStatesReachable = BlueWinStatesReachable(state.board);
+    //const int torqueL = TorqueL(state.board);
+    //const int torqueR = TorqueR(state.board);
     int score;
     // I am red?
     if (State::Turn_Red == who)
@@ -369,8 +371,11 @@ struct BoardEvaluationInverseDepthWinStates
       }
       else
       {
-        score = redWinStatesReachable - blueWinStatesReachable;
-        score = randScalar() * score;
+        //score = redWinStatesReachable + 1;
+        score = (redWinStatesReachable + 1) *
+                (redWinStatesReachable - blueWinStatesReachable);
+        score = static_cast<int>(score * RandScale());
+        //score *= (0 == (torqueR * torqueL)) ? score: 1;
       }
     }
     // I am blue.
@@ -387,8 +392,11 @@ struct BoardEvaluationInverseDepthWinStates
       }
       else
       {
-        score = blueWinStatesReachable - redWinStatesReachable;
-        score = randScalar() * score;
+        //score = blueWinStatesReachable + 1;
+        score = (blueWinStatesReachable + 1) *
+                (blueWinStatesReachable - redWinStatesReachable);
+        score = static_cast<int>(score * RandScale());
+        //score *= (0 == (torqueR * torqueL)) ? score: 1;
 
       }
     }
@@ -400,8 +408,6 @@ struct BoardEvaluationInverseDepthWinStates
   BoardPosMap blueWinsBoardMap;
   BoardPosPairsMap redWinsBoardMap;
 
-  /// <summary> Internal temporary. </summary>
-  std::vector<BoardPosWeight> bpws;
 };
 
 }

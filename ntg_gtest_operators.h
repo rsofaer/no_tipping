@@ -79,6 +79,12 @@ inline bool operator!=(const State& lhs, const State& rhs)
   return !(lhs == rhs);
 }
 
+inline bool operator<(const Ply& lhs, const Ply& rhs)
+{
+  return (lhs.pos < rhs.pos) &&
+         (lhs.wIdx < rhs.wIdx);
+}
+
 }
 using namespace ntg;
 }
