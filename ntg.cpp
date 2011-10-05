@@ -15,6 +15,8 @@ void BuildState(std::istream &input, State* stateBuffer)
   int redWeightsRemaining=0;
   int blueWeightsRemaining=0;
   getline(input, curLine);
+  memset(stateBuffer->removed, Board::Empty, sizeof(stateBuffer->removed));
+  ClearBoard(&(stateBuffer->board));
 
   //std::cout << curLine << "\n";
 
@@ -26,6 +28,7 @@ void BuildState(std::istream &input, State* stateBuffer)
   {
     stateBuffer->phase = State::Phase_Removing;
   }
+  
 
   while(getline(input, curLine))
   {
@@ -45,7 +48,6 @@ void BuildState(std::istream &input, State* stateBuffer)
     
     //std::cout << onBoard << " " << position << " " << color << " " << weight << "\n";
 
-    ClearBoard(&(stateBuffer->board));
     
     if(onBoard == 1)
     {
@@ -55,12 +57,10 @@ void BuildState(std::istream &input, State* stateBuffer)
       {
         //std::cout << "Piece is red\n";
         stateBuffer->red.hand[weight-1] = Player::Played;
-        redWeightsRemaining++;
       }else if(color == "Blue")
       {
         //std::cout << "Piece is blue\n";
         stateBuffer->blue.hand[weight-1] = Player::Played;
-        blueWeightsRemaining++;
       }
       else
       {
@@ -75,11 +75,13 @@ void BuildState(std::istream &input, State* stateBuffer)
       {
         //std::cout << "Piece is red\n";
         stateBuffer->red.hand[weight-1] = weight;
+        redWeightsRemaining++;
         //std::cout << "hand is " << stateBuffer->red.hand[weight-1] << "at index " << weight-1 << "\n";
       } else if(color == "Blue")
       {
         //std::cout << "Piece is blue\n";
         stateBuffer->blue.hand[weight-1] = weight;
+        blueWeightsRemaining++;
       } else 
       { 
         // 
@@ -101,17 +103,20 @@ void BuildState(std::istream &input, State* stateBuffer)
 
     stateBuffer->turn = State::Turn_Blue;
   } else { assert(false); }
+  
+  stateBuffer->red.remain = redWeightsRemaining;
+  stateBuffer->blue.remain = blueWeightsRemaining;
 }
 
 void printState(State &state)
 {
-  std::cout << "Red's hand: ";
+  std::cout << "\nRed has " << state.red.remain << " weights remaining: ";
   for(int i = 0; i < 10; i++)
   {
     std::cout << state.red.hand[i] << " ";
   }
   
-  std::cout << "\nBlue's hand: ";
+  std::cout << "\nBlue has " << state.blue.remain << " weights remaining: ";
   for(int j = 0; j < 10; j++)
   {
     std::cout << state.blue.hand[j] << " ";
@@ -131,11 +136,11 @@ std::string CalculateMoveWrapper()
   State stateBuffer; // get Statebuffer's previous states from a method that has saved it.
   //CalculateMove gets called on every move of the opponent, maintain a state somewhere and get it back.
   BuildState(std::cin, &stateBuffer);
-  printState(stateBuffer);
+  //printState(stateBuffer);
   
-  State sampleState;
-  InitState(&sampleState);
-  printState(sampleState);
+  //State sampleState;
+  //InitState(&sampleState);
+  //printState(sampleState);
   Minimax::Params params;
   {
     params.maxDepthAdding = 3;
@@ -148,8 +153,8 @@ std::string CalculateMoveWrapper()
   int position = ply.pos;
   int weight = CurrentPlayer(&stateBuffer)->hand[ply.wIdx];
   std::stringstream ss;
-  std::cout << "Position: " << position << "\n";
-  std::cout << "Weight: " << weight << "\n";
+  //std::cout << "Position: " << position << "\n";
+  //std::cout << "Weight: " << weight << "\n";
   ss << position << " " << weight;
   return ss.str();
 }

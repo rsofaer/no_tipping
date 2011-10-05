@@ -23,6 +23,9 @@ class Contestant extends NoTippingPlayer
       java.io.PrintWriter cppStdin = new java.io.PrintWriter(p.getOutputStream(), true);
       
       for(String s : lines)
+        System.out.println(s);
+
+      for(String s : lines)
         cppStdin.println(s);
 
       cppStdin.println("STATE END");

@@ -76,9 +76,7 @@ struct GenericBoard
   {
     assert(pos >= -Size);
     assert(pos <= Size);
-    // rsofaer -- 20110929 -- Assert board not tipped.
-    // reissb -- 20111002 -- This should go into an external function
-    //   bool BoardTipped(const Board&).
+
     positions[pos + Size] = w;
   }
   inline Weight GetPos(const int pos) const
