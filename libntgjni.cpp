@@ -21,8 +21,9 @@ void BuildState(std::string command,State& stateBuffer)
     std::stringstream ss(command);
     int redWeightsRemaining=0;
     int blueWeightsRemaining=0;
-    getline(ss, curLine);
-
+    int next = command.find_first_of(";");
+    int prev=0;
+    curLine = command.substr(prev, next-prev);
     std::cout << curLine << "\n";
 
     if(curLine == "ADDING")
@@ -34,9 +35,11 @@ void BuildState(std::string command,State& stateBuffer)
         stateBuffer.phase = State::Phase_Removing;
     }
     
-    while(getline(ss, curLine))
+    while(next!=std::string::npos)
     {
-      std::cout << curLine << "\n";
+      prev = next;
+      next = command.find_first_of(";",prev);
+      curLine = command.substr(prev, next-prev);
         std::stringstream sstream(curLine);
         int onBoard;
         int position;

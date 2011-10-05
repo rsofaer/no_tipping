@@ -39,7 +39,7 @@ public abstract class NoTippingPlayer {
                     state.delete(0, state.length());
                     continue;
                 }
-                state.append(command+"\n");
+                state.append(command+";");
             }
         }
         catch (IOException io) {
