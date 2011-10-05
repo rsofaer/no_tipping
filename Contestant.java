@@ -4,54 +4,71 @@ import java.io.BufferedReader;
 import java.io.IOException;
 class Contestant extends NoTippingPlayer 
 {
-    public Contestant(int port) 
+  public Contestant(int port) 
+  {
+    super(port);
+    System.out.println("Starting on :" + port);
+  }
+  protected String process(String command) 
+  {
+    String move=null;
+    Runtime runTime = Runtime.getRuntime();
+    Process p = null;
+    try 
     {
-	super(port);
-    }
-    protected String process(String command) 
-    {
-	String move=null;
-	Runtime runTime = Runtime.getRuntime();
-	Process p = null;
-	String cmd[] = {"./no_tipping_game", command };
-	try 
-	{
-	    p = runTime.exec(cmd);
-	    p.waitFor();
-	} 
-	catch (Exception e) 
-	{
-	    System.out.println("error executing " + cmd[0]);
-	}
-	try
-	{
-	    InputStream in = p.getInputStream();
-	    InputStreamReader insr = new InputStreamReader(in);
-	    BufferedReader br = new BufferedReader(insr);
-	    String output;
-	    StringBuffer sb = new StringBuffer();
-	    while((output=br.readLine())!=null)
-	    {
-		sb.append(output+"\n");
-	    }
-	}
-	catch(IOException ex)
-	{
-	    System.out.println("Error reading the stream: "+ex.getMessage());
-	}
-	return move;
-    }
+      System.out.println("Running C++ program.");
+      p = runTime.exec("./no_tipping_game");
 
-    public static void main(String[] args) throws Exception 
+      String[] lines = command.split("\n");
+      java.io.PrintWriter cppStdin = new java.io.PrintWriter(p.getOutputStream(), true);
+      
+      for(String s : lines)
+        System.out.println(s);
+
+      for(String s : lines)
+        cppStdin.println(s);
+
+      cppStdin.println("STATE END");
+      
+      p.waitFor();
+    } 
+    catch (Exception e) 
     {
-	if(args.length==1)
-	{
-	    int port = Integer.parseInt(args[0]);
-	    new Contestant(port);
-	}
-	else
-	{
-	    System.out.println("Usage: Contestant.java <port-number>");
-	}
+      System.out.println("error executing " + command);
     }
+    try
+    {
+      System.out.println("Capturing output");
+      InputStream in = p.getInputStream();
+      InputStreamReader insr = new InputStreamReader(in);
+      BufferedReader br = new BufferedReader(insr);
+      String output;
+      StringBuffer sb = new StringBuffer();
+      while((output=br.readLine())!=null)
+      {
+        sb.append(output+"\n");
+      }
+      move = sb.toString();
+    }
+    catch(IOException ex)
+    {
+      System.out.println("Error reading the stream: "+ex.getMessage());
+    }
+    System.out.println("Output: " + move);
+    return move;
+  }
+
+  public static void main(String[] args) throws Exception 
+  {
+    if(args.length==1)
+    {
+      int port = Integer.parseInt(args[0]);
+      System.out.println("Creating server.");
+      new Contestant(port);
+    }
+    else
+    {
+      System.out.println("Usage: Contestant.java <port-number>");
+    }
+  }
 }
