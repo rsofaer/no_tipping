@@ -30,7 +30,6 @@ class Contestant extends NoTippingPlayer
 
       cppStdin.println("STATE END");
       
-      System.out.println("Waiting for program to terminate.");
       p.waitFor();
     } 
     catch (Exception e) 
@@ -50,12 +49,12 @@ class Contestant extends NoTippingPlayer
         sb.append(output+"\n");
       }
       move = sb.toString();
-      System.out.println("Output: " + move);
     }
     catch(IOException ex)
     {
       System.out.println("Error reading the stream: "+ex.getMessage());
     }
+    System.out.println("Output: " + move);
     return move;
   }
 
