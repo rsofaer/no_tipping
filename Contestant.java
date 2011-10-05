@@ -11,15 +11,16 @@ class Contestant extends NoTippingPlayer
   }
   protected String process(String command) 
   {
-    System.out.println(command);
     String move=null;
     Runtime runTime = Runtime.getRuntime();
     Process p = null;
     try 
     {
+      System.out.println("Running C++ program.");
       p = runTime.exec("./no_tipping_game");
-      java.io.OutputStream cppStdin = p.getOutputStream();
-      cppStdin.write(command.getBytes());
+      java.io.PrintWriter cppStdin = new java.io.PrintWriter(p.getOutputStream(), true);
+      cppStdin.print(command);
+      System.out.println("Waiting for program to terminate.");
       p.waitFor();
     } 
     catch (Exception e) 
@@ -28,6 +29,7 @@ class Contestant extends NoTippingPlayer
     }
     try
     {
+      System.out.println("Capturing output");
       InputStream in = p.getInputStream();
       InputStreamReader insr = new InputStreamReader(in);
       BufferedReader br = new BufferedReader(insr);
@@ -37,6 +39,8 @@ class Contestant extends NoTippingPlayer
       {
         sb.append(output+"\n");
       }
+      move = sb.toString();
+      System.out.println("Output: " + move);
     }
     catch(IOException ex)
     {
