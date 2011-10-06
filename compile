@@ -1,0 +1,5 @@
+#! /bin/sh
+
+cmake -D CMAKE_BUILD_TYPE:string=Release ./
+make
+javac *.java
