@@ -88,8 +88,7 @@ void BuildState(std::istream &input, State* stateBuffer)
         blueWeightsRemaining++;
       } else 
       { 
-        // 
-        assert(false); 
+        // Piece is green
       }
     }
   }
@@ -151,7 +150,7 @@ std::string CalculateMoveWrapper()
   State stateBuffer; // get Statebuffer's previous states from a method that has saved it.
   //CalculateMove gets called on every move of the opponent, maintain a state somewhere and get it back.
   BuildState(std::cin, &stateBuffer);
-  printState(stateBuffer);
+  //printState(stateBuffer);
   
   //State sampleState;
   //InitState(&sampleState);
@@ -165,12 +164,21 @@ std::string CalculateMoveWrapper()
   BoardEvaluationInverseDepthWinStates evalFunc(stateBuffer.turn);
   Ply ply;
   Minimax::Run(&params, &stateBuffer, &evalFunc, &ply);
+    std::stringstream ss;
   int position = ply.pos;
-  int weight = CurrentPlayer(&stateBuffer)->hand[ply.wIdx];
-  std::stringstream ss;
-  //std::cout << "Position: " << position << "\n";
-  //std::cout << "Weight: " << weight << "\n";
-  ss << position << " " << weight;
+  int weight;
+  ss << position;
+  if(stateBuffer.phase == State::Phase_Adding){
+    
+    int position = ply.pos;
+    weight = CurrentPlayer(&stateBuffer)->hand[ply.wIdx];
+    //std::cout << "Position: " << position << "\n";
+    //std::cout << "Weight: " << weight << "\n";
+
+  } else {
+    weight = stateBuffer.board.GetPos(position);
+  }
+  ss << " " << weight;
   return ss.str();
 }
 
