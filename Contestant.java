@@ -28,7 +28,7 @@ class Contestant extends NoTippingPlayer
       for(String s : lines)
         cppStdin.println(s);
 
-      cppStdin.println("STATE END");
+      //cppStdin.println("STATE END");
       
       p.waitFor();
     } 
@@ -48,7 +48,7 @@ class Contestant extends NoTippingPlayer
       {
         sb.append(output+"\n");
       }
-      move = sb.toString();
+      move = sb.toString().trim();
     }
     catch(IOException ex)
     {

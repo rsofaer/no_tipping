@@ -14,6 +14,9 @@ void BuildState(std::istream &input, State* stateBuffer)
   std::string curLine;
   int redWeightsRemaining=0;
   int blueWeightsRemaining=0;
+  
+  int weightsOnBoard = 0;
+  
   getline(input, curLine);
   memset(stateBuffer->removed, Board::Empty, sizeof(stateBuffer->removed));
   ClearBoard(&(stateBuffer->board));
@@ -51,6 +54,7 @@ void BuildState(std::istream &input, State* stateBuffer)
     
     if(onBoard == 1)
     {
+      weightsOnBoard++;
       //std::cout << "Piece is on the board.\n";
       stateBuffer->board.SetPos(position, weight);
       if(color == "Red")
@@ -91,18 +95,29 @@ void BuildState(std::istream &input, State* stateBuffer)
   }
   //std::cout << "Red weights remaining: " << redWeightsRemaining << "\n";
   //std::cout << "Blue weights remaining: " << blueWeightsRemaining << "\n";
+  
+  if(stateBuffer->phase == State::Phase_Adding){
+    if(redWeightsRemaining == blueWeightsRemaining){
+      //Red's turn
+      //std::cout << "Red's turn.\n";
+      stateBuffer->turn = State::Turn_Red;
+    } else if(blueWeightsRemaining > redWeightsRemaining)
+    {
+      //Blue's turn
+      //std::cout << "Blue's turn.\n";
+      
+      stateBuffer->turn = State::Turn_Blue;
+    } else { assert(false); }
+    
+  }else{
+    //Phase is removing.
+    if(weightsOnBoard % 2 == 1){
+      stateBuffer->turn = State::Turn_Red;
+    } else {
+      stateBuffer->turn = State::Turn_Blue;
+    }
 
-  if(redWeightsRemaining == blueWeightsRemaining){
-    //Red's turn
-    //std::cout << "Red's turn.\n";
-    stateBuffer->turn = State::Turn_Red;
-  } else if(blueWeightsRemaining > redWeightsRemaining)
-  {
-    //Blue's turn
-    //std::cout << "Blue's turn.\n";
-
-    stateBuffer->turn = State::Turn_Blue;
-  } else { assert(false); }
+  }
   
   stateBuffer->red.remain = redWeightsRemaining;
   stateBuffer->blue.remain = blueWeightsRemaining;
@@ -136,7 +151,7 @@ std::string CalculateMoveWrapper()
   State stateBuffer; // get Statebuffer's previous states from a method that has saved it.
   //CalculateMove gets called on every move of the opponent, maintain a state somewhere and get it back.
   BuildState(std::cin, &stateBuffer);
-  //printState(stateBuffer);
+  printState(stateBuffer);
   
   //State sampleState;
   //InitState(&sampleState);

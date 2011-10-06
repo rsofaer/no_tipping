@@ -138,8 +138,8 @@ struct Minimax
     if (completedAddingPhase && (0 == params->depth))
     {
       params->maxDepthRemoving += (0 == params->depth) * (removingDepth * 2);
-      std::cout << "Increased depth to " << params->maxDepthRemoving
-                << " from " << maxDepth << "." << std::endl;
+      //std::cout << "Increased depth to " << params->maxDepthRemoving
+       //         << " from " << maxDepth << "." << std::endl;
     }
     return minimax;
   }
