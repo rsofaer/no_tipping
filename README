@@ -1,1 +1,7 @@
 A solver for the no tipping game, for Dennis Shasha's Heuristics class of Fall 2011
+Compile with "cmake -D CMAKE_BUILD_TYPE:string=Release ./"
+             "javac *.java"
+run with "java Contestant <port_number>"
+The java app expects the c++ "no_tipping_game executable to be in the working directory.
+
+Thanks!
