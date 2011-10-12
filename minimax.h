@@ -142,7 +142,7 @@ struct Minimax
     --depth;
     if (std::numeric_limits<int>::min() == minimax)
     {
-      std::cout << "No guaranteed victory." << std::endl;
+//      std::cout << "No guaranteed victory." << std::endl;
       // Select ply based on heuristic.
       DoPly(plys.front(), state);
       int bestPlyScore = (*evalFunc)(*state);

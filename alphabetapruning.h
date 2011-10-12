@@ -75,8 +75,8 @@ struct AlphaBetaPruning
     }
     assert(maxDepth > 1);
     assert(depth < maxDepth);
-    std::cout << "AlphaBetaPruning::Run() : maxDepth = " << maxDepth
-              << "." << std::endl;
+//    std::cout << "AlphaBetaPruning::Run() : maxDepth = " << maxDepth
+//              << "." << std::endl;
     ++depth;
 
     // Get the children of the current state.
@@ -147,7 +147,7 @@ struct AlphaBetaPruning
     --depth;
     if (std::numeric_limits<int>::min() == minimax)
     {
-      std::cout << "No guaranteed victory." << std::endl;
+//      std::cout << "No guaranteed victory." << std::endl;
       // Select ply based on heuristic.
       DoPly(plys.front(), state);
       int bestPlyScore = (*evalFunc)(*state);
