@@ -1,6 +1,7 @@
 #ifndef _NO_TIPPING_GAME_NTG_PLAYERS_H_
 #define _NO_TIPPING_GAME_NTG_PLAYERS_H_
 #include "minimax.h"
+#include "alphabetapruning.h"
 #include "adversarial_utils.h"
 #include "no_tipping_game.h"
 #include "rand_bound_generator.h"
@@ -43,18 +44,18 @@ struct RandomPlayer
 
 struct MinimaxPlayer
 {
-  MinimaxPlayer(const State::Turn who)
-    : params(),
+  MinimaxPlayer(const State::Turn who_)
+    : who(who_),
+      params(),
       evalFunc(who)
   {
-#ifndef NDEBUG
+#if NDEBUG
+    params.maxDepthAdding = 4;
+    // Search the whole tree once we arrive at the remove phase.
+    params.maxDepthRemoving = State::NumRemoved;
+#else
     params.maxDepthAdding = 3;
     params.maxDepthRemoving = 3;
-    //params.maxDepthRemoving = std::numeric_limits<int>::max();
-#else
-    params.maxDepthAdding = 4;
-    params.maxDepthRemoving = 5;
-    //params.maxDepthRemoving = 10;
 #endif
   }
 
@@ -71,8 +72,44 @@ struct MinimaxPlayer
     assert(ply->pos <= Board::Size);
   }
 
+  State::Turn who;
   Minimax::Params params;
-  BoardEvaluationInverseDepthWinStates evalFunc;
+  BoardEvaluationReachableWinStates evalFunc;
+};
+
+struct AlphaBetaPruningPlayer
+{
+  AlphaBetaPruningPlayer(const State::Turn who_)
+    : who(who_),
+      params(),
+      evalFunc(who)
+  {
+#if NDEBUG
+    params.maxDepthAdding = 4;
+    // Search the whole tree once we arrive at the remove phase.
+    params.maxDepthRemoving = State::NumRemoved;
+#else
+    params.maxDepthAdding = 3;
+    params.maxDepthRemoving = 3;
+#endif
+  }
+
+  /// <summary> Return next ply without mutating the state. </summary>
+  void NextPly(State* state, Ply* ply)
+  {
+    assert(state);
+    assert(ply);
+    assert(!Tipped(state->board));
+
+    // Get the minimax move.
+    AlphaBetaPruning::Run(&params, state, &evalFunc, ply);
+    assert(ply->pos >= -Board::Size);
+    assert(ply->pos <= Board::Size);
+  }
+
+  State::Turn who;
+  AlphaBetaPruning::Params params;
+  BoardEvaluationReachableWinStates evalFunc;
 };
 
 struct MonteCarloPlayer

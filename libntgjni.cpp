@@ -21,7 +21,7 @@ void BuildState(std::string command,State& stateBuffer)
     std::stringstream ss(command);
     int redWeightsRemaining=0;
     int blueWeightsRemaining=0;
-    int next = command.find_first_of(";");
+    std::string::size_type next = command.find_first_of(";");
     int prev=0;
     curLine = command.substr(prev, next-prev);
     std::cout << curLine << "\n";
@@ -100,7 +100,7 @@ std::string CalculateMoveWrapper(std::string command)
         params.maxDepthRemoving = 5;
     }
 
-    BoardEvaluationInverseDepthWinStates evalFunc(stateBuffer.turn);
+    BoardEvaluationReachableWinStates evalFunc(stateBuffer.turn);
     Ply ply;
     Minimax::Run(&params, &stateBuffer, &evalFunc, &ply);
     int position = ply.pos;
@@ -125,7 +125,11 @@ JNIEXPORT jstring JNICALL Java_LibNtgJni_Compute(JNIEnv* env,
   std::string move = hps::ntg::CalculateMoveWrapper(sCommand);
 
   char cBuf[MaxCmdStrLen];
+#if WIN32
+  strcpy_s(cBuf,sizeof(cBuf),move.c_str());
+#else
   strcpy(cBuf,move.c_str());
+#endif
   env->ReleaseStringUTFChars(command,buf);
 
   return env->NewStringUTF(cBuf);

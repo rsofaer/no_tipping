@@ -148,7 +148,9 @@ struct State
     Phase_Removing,
   };
 
-  enum { NumRemoved = (2 * Player::NumWeights) + detail::Board_InitWeights, };
+  enum { NumAdded = (2 * Player::NumWeights), };
+  enum { NumRemoved = NumAdded + detail::Board_InitWeights, };
+  enum { MaxPlys = NumAdded + NumRemoved, };
 
   Board board;
   Player red;
@@ -275,18 +277,43 @@ template <int Pivot, typename BoardType>
 int Torque(const BoardType& board)
 {
   int torque = (Pivot - BoardType::CenterOfGravity) * BoardType::BoardWeight;
-  for (int pos = -BoardType::Size; pos <= BoardType::Size; ++pos)
+  int lever = Pivot + BoardType::Size;
+  for (typename BoardType::const_iterator w = board.begin();
+       w != board.end();
+       ++w, --lever)
   {
-    torque += board[pos] * (Pivot - pos);
+    torque += *w * lever;
   }
   return torque;
 }
 
 template <typename BoardType>
+void Torques(const BoardType& board, int* torqueL, int* torqueR)
+{
+  assert(torqueL && torqueR);
+
+  *torqueL = (BoardType::PivotL - BoardType::CenterOfGravity) *
+             BoardType::BoardWeight;
+  *torqueR = (BoardType::PivotR - BoardType::CenterOfGravity) *
+             BoardType::BoardWeight;
+  int leverL = BoardType::PivotL + BoardType::Size;
+  int leverR = BoardType::PivotR + BoardType::Size;
+  for (typename BoardType::const_iterator w = board.begin();
+       w != board.end();
+       ++w, --leverL, --leverR)
+  {
+    *torqueL += *w * leverL;
+    *torqueR += *w * leverR;
+  }
+}
+
+template <typename BoardType>
 inline bool Tipped(const BoardType& board)
 {
-  return (Torque<BoardType::PivotL>(board) > 0) ||
-         (Torque<BoardType::PivotR>(board) < 0);
+  int torqueL;
+  int torqueR;
+  Torques(board, &torqueL, &torqueR);
+  return (torqueL > 0) || (torqueR < 0);
 }
 
 } // end ns detail
@@ -303,9 +330,15 @@ inline int TorqueR(const Board& board)
   return detail::Torque<Board::PivotR, Board>(board);
 }
 
+inline void Torques(const Board& board, int* torqueL, int* torqueR)
+{
+  assert(torqueL && torqueR);
+  detail::Torques(board, torqueL, torqueR);
+}
+
 inline bool Tipped(const Board& board)
 {
-  return (TorqueL(board) > 0) || (TorqueR(board) < 0);
+  return detail::Tipped(board);
 }
 
 namespace detail
@@ -329,8 +362,9 @@ public:
     assert(plys->empty());
 
     const Board& board = state.board;
-    const int torqueL = TorqueL(board);
-    const int torqueR = TorqueR(board);
+    int torqueL;
+    int torqueR;
+    Torques(board, &torqueL, &torqueR);
     typedef std::binder2nd<LeftPivotOp> BoundLeftPivotOp;
     typedef std::binder2nd<RightPivotOp> BoundRightPivotOp;
     const BoundLeftPivotOp exclL = std::bind2nd(LeftPivotOp(), 0);
@@ -341,7 +375,7 @@ public:
     {
       int pos = -Board::Size;
       const Weight* w = board.begin();
-      int leverL = pos - Board::PivotL;
+      int leverL = Board::PivotL - pos;
       int leverR = Board::PivotR - pos;
       for (; pos < Board::Size; ++pos, ++w, --leverL, --leverR)
       {

@@ -56,6 +56,7 @@ struct Minimax
                  Ply* ply)
   {
     assert(params && state && evalFunc && ply);
+    assert(!Tipped(state->board));
 
     int maxDepth = params->maxDepthAdding;
     int& depth = params->depth;
@@ -80,9 +81,10 @@ struct Minimax
     std::vector<Ply>& plys = params->rootPlys;
     plys.clear();
     PossiblePlys(*state, &plys);
+    std::random_shuffle(plys.begin(), plys.end());
     // A leaf has no non-suicidal moves. Who won?
     int minimax;
-    if (0 == plys.size())
+    if (plys.empty())
     {
       minimax = ScoreLeaf(depth, state, ply);
     }
@@ -107,7 +109,7 @@ struct Minimax
         }
       }
       // Parallelize the first level.
-#pragma omp parallel for
+#pragma omp parallel for schedule(dynamic)
       for (int plyIdx = 0; plyIdx < static_cast<int>(plys.size()); ++plyIdx)
       {
         const int threadIdx = omp_get_thread_num();
@@ -138,14 +140,27 @@ struct Minimax
     }
 
     --depth;
-    // reissb -- 20111004 -- Try to increse search as the search space
-    //   decreases. This is becuase there are less moves further down
-    //   the tree.
-    if (completedAddingPhase && (0 == depth))
+    if (std::numeric_limits<int>::min() == minimax)
     {
-      params->maxDepthRemoving += (removingDepth * 2);
-//      std::cout << "Increased depth to " << params->maxDepthRemoving
-//                << " from " << maxDepth << "." << std::endl;
+      std::cout << "No guaranteed victory." << std::endl;
+      // Select ply based on heuristic.
+      DoPly(plys.front(), state);
+      int bestPlyScore = (*evalFunc)(*state);
+      *ply = plys.front();
+      UndoPly(plys.front(), state);
+      for (std::vector<Ply>::const_iterator testPly = plys.begin();
+           testPly != plys.end();
+           ++testPly)
+      {
+        DoPly(*testPly, state);
+        int plyScore = (*evalFunc)(*state);
+        if (plyScore > bestPlyScore)
+        {
+          bestPlyScore = plyScore;
+          *ply = *testPly;
+        }
+        UndoPly(*testPly, state);
+      }
     }
     return minimax;
   }
@@ -217,9 +232,12 @@ private:
   static int RunThread(ThreadParams* params,
                        const BoardEvaulationFunction* evalFunc)
   {
+    assert(params && evalFunc);
+
     int& depth = params->depth;
     const int& maxDepth = params->maxDepth;
     State* state = &params->state;
+    assert(!Tipped(state->board));
     assert(depth < maxDepth);
     ++depth;
 
@@ -227,9 +245,10 @@ private:
     std::vector<Ply>& plys = params->dfsPlys[params->depth - 2];
     plys.clear();
     PossiblePlys(*state, &plys);
+    std::random_shuffle(plys.begin(), plys.end());
     // Is this a leaf?
     int minimax;
-    if (0 == plys.size())
+    if (plys.empty())
     {
       Ply tossPly;
       minimax = ScoreLeaf(depth, state, &tossPly);

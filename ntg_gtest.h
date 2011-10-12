@@ -98,6 +98,8 @@ TEST(Player, NoTippingComponents)
 TEST(State, NoTippingComponents)
 {
   // Default state.
+  std::cout << "State::MaxPlys " << State::MaxPlys << "." << std::endl;
+  std::cout << "State::NumRemoved " << State::NumRemoved << "." << std::endl;
   {
     SCOPED_TRACE("InitState");
     State state;
@@ -249,6 +251,35 @@ TEST(State, NoTippingComponents)
   }
 }
 
+TEST(PlysExhaustive, NoTippingComponents)
+{
+  {
+    State state;
+    InitState(&state);
+    std::vector<Ply> plys;
+    bool moreMoves = false;
+    int turns = 0;
+    do
+    {
+      plys.clear();
+      PossiblePlys(state, &plys);
+      for (size_t plyIdx = 0; plyIdx < plys.size(); ++plyIdx)
+      {
+        DoPly(plys[plyIdx], &state);
+        EXPECT_FALSE(Tipped(state.board));
+        UndoPly(plys[plyIdx], &state);
+      }
+      moreMoves = !plys.empty();
+      if (moreMoves)
+      {
+        ++turns;
+        int randomPly = RandBound(plys.size());
+        DoPly(plys[randomPly], &state);
+      }
+    } while (moreMoves);
+  }
+}
+
 TEST(Torque, NoTippingComponents)
 {
   // Default board.
@@ -256,8 +287,13 @@ TEST(Torque, NoTippingComponents)
     SCOPED_TRACE("Default board torque");
     Board board;
     InitBoard(&board);
-    EXPECT_EQ(TorqueL(board), -6);
-    EXPECT_EQ(TorqueR(board), 6);
+    int torqueL;
+    int torqueR;
+    Torques(board, &torqueL, &torqueR);
+    EXPECT_EQ(TorqueL(board), torqueL);
+    EXPECT_EQ(TorqueR(board), torqueR);
+    EXPECT_EQ(torqueL, -6);
+    EXPECT_EQ(torqueR, 6);
   }
   // Some random board torques.
   {
@@ -280,7 +316,8 @@ TEST(Torque, NoTippingComponents)
       EXPECT_EQ(-pos * randW, torque);
       if (0 != pos)
       {
-        EXPECT_TRUE(detail::Tipped(board));
+        const bool tipped = detail::Tipped(board);
+        EXPECT_TRUE(tipped);
       }
     }
   }
@@ -331,7 +368,7 @@ TEST(AddingPhasePlys, NoTippingComponents)
             DoPly(plys[doIdx], &state);
           }
         }
-      } while ((State::Phase_Adding == state.phase) && (plys.size() > 0));
+      } while ((State::Phase_Adding == state.phase) && (!plys.empty()));
     }
   }
 }
@@ -368,7 +405,7 @@ TEST(RemovingPhasePlys, NoTippingComponents)
             DoPly(plys[doIdx], &state);
           }
         }
-      } while (plys.size() > 0);
+      } while (!plys.empty());
     }
   }
 }

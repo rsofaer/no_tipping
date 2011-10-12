@@ -1,6 +1,13 @@
 cmake_minimum_required(VERSION 2.8)
 file(GLOB HEADERS "*.h")
 
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  message("Setting CMAKE_INSTALL_PREFIX to ${CMAKE_BINARY_DIR}.")
+  set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
+else(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  message("CMAKE_INSTALL_PREFIX was set to ${CMAKE_INSTALL_PREFIX}.")
+endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+
 find_package(OpenMP REQUIRED)
 
 project(ntg)
@@ -21,6 +28,24 @@ target_link_libraries(no_tipping_game ntg)
 if(WIN32)
   set_target_properties(no_tipping_game PROPERTIES COMPILE_FLAGS ${OpenMP_CXX_FLAGS})
 endif(WIN32)
+install(TARGETS no_tipping_game RUNTIME DESTINATION bin)
+if(WIN32)
+  add_custom_command(TARGET no_tipping_game
+                     POST_BUILD
+                     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                     COMMAND del /F /Q *.class
+                     COMMAND javac *.java)
+else(WIN32)
+  add_custom_command(TARGET no_tipping_game
+                     POST_BUILD
+                     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                     COMMAND rm -f *.class
+                     COMMAND javac *.java)
+endif(WIN32)
+install(
+  CODE "file(GLOB JAVA_CLASSES \"${CMAKE_CURRENT_BINARY_DIR}/*.class\")"
+  CODE "file(INSTALL \${JAVA_CLASSES} DESTINATION \"${CMAKE_INSTALL_PREFIX}/bin\")"
+  )
 
 project(ntgjni)
 find_package(JNI REQUIRED)
@@ -43,6 +68,7 @@ if(HPS_GTEST_ENABLED)
   if(WIN32)
     set_target_properties(ntg_gtest PROPERTIES COMPILE_FLAGS ${OpenMP_CXX_FLAGS})
   endif(WIN32)
+  add_test(Ntg_GTest ntg_gtest)
 endif(HPS_GTEST_ENABLED)
 
 file(GLOB JAVA_SRCS "*.java")

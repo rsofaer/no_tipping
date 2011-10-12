@@ -124,25 +124,29 @@ void BuildState(std::istream &input, State* stateBuffer)
 
 void printState(State &state)
 {
-  std::cout << "\nRed has " << state.red.remain << " weights remaining: ";
+  std::cout << "Red has " << state.red.remain << " weights remaining: ";
   for(int i = 0; i < 10; i++)
   {
     std::cout << state.red.hand[i] << " ";
   }
+  std::cout << std::endl;
   
-  std::cout << "\nBlue has " << state.blue.remain << " weights remaining: ";
+  std::cout << "Blue has " << state.blue.remain << " weights remaining: ";
   for(int j = 0; j < 10; j++)
   {
     std::cout << state.blue.hand[j] << " ";
   }
+  std::cout << std::endl;
   
-  std::cout << "\nThe board: ";
+  std::cout << "The board: ";
   for(int k = -15; k < 16; k++){
     std::cout << state.board.GetPos(k) << " ";
   }
-  std::cout << "\n";
-  std::cout << "Phase is adding?: " << (state.phase == State::Phase_Adding) << "\n";
-  std::cout << "Turn is red?: " << (state.turn == State::Turn_Red) << "\n";
+  std::cout << std::endl
+            << "Phase is adding?: " << (state.phase == State::Phase_Adding)
+            << std::endl
+            << "Turn is red?: " << (state.turn == State::Turn_Red)
+            << std::endl;
 }
 
 std::string CalculateMoveWrapper()
@@ -161,33 +165,30 @@ std::string CalculateMoveWrapper()
     params.maxDepthRemoving = 5;
   }
 
-  BoardEvaluationInverseDepthWinStates evalFunc(stateBuffer.turn);
+  BoardEvaluationReachableWinStates evalFunc(stateBuffer.turn);
   Ply ply;
   Minimax::Run(&params, &stateBuffer, &evalFunc, &ply);
     std::stringstream ss;
   int position = ply.pos;
   int weight;
   ss << position;
-  if(stateBuffer.phase == State::Phase_Adding){
-    
-    int position = ply.pos;
+  if (stateBuffer.phase == State::Phase_Adding)
+  {
     weight = CurrentPlayer(&stateBuffer)->hand[ply.wIdx];
-    //std::cout << "Position: " << position << "\n";
-    //std::cout << "Weight: " << weight << "\n";
-
-  } else {
+  }
+  else
+  {
     weight = stateBuffer.board.GetPos(position);
   }
   ss << " " << weight;
   return ss.str();
 }
 
-
-
-int main(int argc, char** argv)
+int main(int /*argc*/, char** /*argv*/)
 {
   // Get the string for the state.
-  std::cout << CalculateMoveWrapper() << std::endl;
-
-  return 0;
+  for (;;)
+  {
+    std::cout << CalculateMoveWrapper() << std::endl;
+  }
 }

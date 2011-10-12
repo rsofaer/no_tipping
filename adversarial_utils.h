@@ -1,35 +1,64 @@
 #ifndef _NO_TIPPING_GAME_ADVERSARIAL_UTILS_H_
 #define _NO_TIPPING_GAME_ADVERSARIAL_UTILS_H_
 #include "combination.h"
-#include "rand_bound_generator.h"
+
+#if NDEBUG
+#define HPS_NTG_ASSERT_BOARD_HASH_NO_DUPS(states)
+#else
+#define HPS_NTG_ASSERT_BOARD_HASH_NO_DUPS(states)                              \
+      for (BoardHashList::const_iterator hash = states.begin() + 1;            \
+           hash != states.end();                                               \
+           ++hash)                                                             \
+      {                                                                        \
+        assert(*hash != *(hash - 1));                                          \
+      }
+#endif
 
 namespace hps
 {
 namespace ntg
 {
 
-/// <summary> Functional helper to identify states that conflict a given
-///   game board.
-/// </summary>
-struct ConflictWithBoard
+namespace detail
 {
-  /// <summary> Fast lookup to comparison board. </summary>
-  typedef std::map<int, int> BoardMap;
+/// <summary> Test board for conflict with a base board. </summary>
+struct ConflictBoard
+{
+  ConflictBoard(const Board& board_)
+    : board(board_)
+  {}
 
-  ConflictWithBoard(const Board& board, State* state_)
-    : boardMap(),
+  bool operator()(const Board& testBoard) const
+  {
+    // Find conflict in the board to the comparison board.
+    Board::const_iterator baseW = board.begin();
+    Board::const_iterator testW = testBoard.begin();
+    for (; baseW != board.end(); ++baseW, ++testW)
+    {
+      const bool baseOccipied = (Board::Empty != *baseW);
+      const bool testOccipied = (Board::Empty != *testW);
+      const bool baseConflict = (*testW != *baseW);
+      if (baseOccipied && testOccipied && baseConflict)
+      {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Board board;
+};
+
+/// <summary> Identify states that conflict a given game board by applying a
+///   ply to the given state.
+/// </summary>
+struct ConflictBoardFromState
+{
+  ConflictBoardFromState(const Board& board_, State* state_)
+    : conflictBoard(board_),
       state(state_)
   {
     assert(state);
-    // Compute fast lookup to board.
-    for (int pos = -Board::Size; pos <= Board::Size; ++pos)
-    {
-      const Weight w = board[pos];
-      if (Board::Empty != w)
-      {
-        boardMap[pos] = w;
-      }
-    }
   }
 
   /// <summary> Test the given ply at the base state for conflicts to
@@ -37,37 +66,74 @@ struct ConflictWithBoard
   /// </summary>
   inline bool operator()(const Ply& ply) const
   {
-    // Mutate the board with this ply.
     DoPly(ply, state);
-    // Find conflict in the board to the comparison board.
-    const Board& board = state->board;
-    bool conflict = false;
-    for (BoardMap::const_iterator boardPos = boardMap.begin();
-         boardPos != boardMap.end();
-         ++boardPos)
-    {
-      const Weight testW = board[boardPos->first];
-      const bool posOccupied = (Board::Empty != testW);
-      const bool posConflict = (boardPos->second != testW);
-      if (posOccupied && posConflict)
-      {
-        conflict = true;
-        break;
-      }
-    }
-    // Undo mutation and return conflict.
+    const bool conflict = conflictBoard(state->board);
     UndoPly(ply, state);
     return conflict;
   }
 
-  BoardMap boardMap;
+  ConflictBoard conflictBoard;
+  mutable State* state;
+};
+
+/// <summary> Adapter for single/double states exclusion. </summary>
+template <typename ExcludeFunc>
+struct ExclBoardAdapter
+{
+  ExclBoardAdapter(ExcludeFunc* exclFunc_, State* state_)
+    : exclFunc(exclFunc_),
+      state(state_)
+  {}
+  inline bool operator()(const Ply& ply)
+  {
+    DoPly(ply, state);
+    const bool exclude = (*exclFunc)(state->board);
+    UndoPly(ply, state);
+    return exclude;
+  }
+  ExcludeFunc* exclFunc;
   State* state;
 };
 
-/// <summary> State and associated plys. </summary>
-typedef std::pair<State, std::vector<Ply> > StatePlysPair;
+struct DoubleWeightWinStateHelper
+{
+  DoubleWeightWinStateHelper(const Board& board_)
+    : board(board_)
+  {}
 
-/// <summary> Set of stable plys with one weight. </summary>
+  bool operator()(Board& testBoard) const
+  {
+    // Find conflict in the board to the comparison board.
+    Board::const_iterator baseW = board.begin();
+    Board::iterator testW = testBoard.begin();
+    Weight tmpW = Board::Empty;
+    for (; baseW != board.end(); ++baseW, ++testW)
+    {
+      const bool baseOccupied = (Board::Empty != *baseW);
+      const bool testOccupied = (Board::Empty != *testW);
+      const bool baseConflict = (*testW != *baseW);
+      if (baseOccupied && testOccupied && baseConflict)
+      {
+        return true;
+      }
+      if (testOccupied)
+      {
+        std::swap(tmpW, *testW);
+        const bool tipped = Tipped(testBoard);
+        std::swap(tmpW, *testW);
+        if (!tipped)
+        {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  Board board;
+};
+
+/// <summary> Set of stable boards with one weight. </summary>
 /// <remarks>
 ///   <para> The player to go last loses if any state with one weight is
 ///     reached since he must remove the final weight and tip the board.
@@ -75,339 +141,548 @@ typedef std::pair<State, std::vector<Ply> > StatePlysPair;
 ///   <para> To win with one weight there cannot be a pivot at 0. </para>
 /// </remarks>
 /// </summary>
-int OneWeightFinalSet(StatePlysPair* set)
+template <typename StorageType,
+          typename StorageAdapterFunc,
+          typename ExcludeFunc>
+int SingleWeightStates(std::vector<StorageType>* set,
+                       StorageAdapterFunc* adaptFunc,
+                       ExcludeFunc* exclFunc)
 {
   assert(set);
-  State& state = set->first;
-  std::vector<Ply>& plys = set->second;
+  assert(adaptFunc);
+  assert(exclFunc);
 
-  // This is really just the plys possible from the board being empty.
+  // Generate the plys possible from the board being empty.
+  State state;
   InitState(&state);
-  const Board initBoard = state.board;
   ClearBoard(&state.board);
   state.turn = State::Turn_Blue;
+  std::vector<Ply> plys;
   PossiblePlys(state, &plys);
-  // Remove all conflicts to initial board.
-  plys.erase(std::remove_if(plys.begin(), plys.end(),
-                            ConflictWithBoard(initBoard, &state)),
-             plys.end());
-  return static_cast<int>(plys.size());
+  ExclBoardAdapter<ExcludeFunc> exclAdapter(exclFunc, &state);
+  plys.erase(std::remove_if(plys.begin(), plys.end(), exclAdapter), plys.end());
+  // Adapt boards into storage.
+  set->reserve(plys.size());
+  set->clear();
+  for (std::vector<Ply>::const_iterator ply = plys.begin();
+       ply != plys.end();
+       ++ply)
+  {
+    DoPly(*ply, &state);
+    set->push_back((*adaptFunc)(state.board));
+    UndoPly(*ply, &state);
+  }
+  return static_cast<int>(set->size());
 }
 
-struct StablePlyRemoveIfHelper
+template <typename PassType>
+struct PassthroughAdapter
 {
-  inline bool operator()(const Ply& rhs) const
+  inline const PassType& operator()(const PassType& type)
   {
-    return (lhs.pos == rhs.pos) &&
-           (lhs.wIdx == rhs.wIdx);
+    return type;
   }
-  Ply lhs;
+};
+template <typename ExclType>
+struct ExcludeNoneFunc
+{
+  inline const bool operator()(const ExclType&)
+  {
+    return false;
+  }
 };
 
-/// <summary> Set of plys stable with two weights such that removal of either
-///   weight leads to a loss.
-/// </summary>
-int TwoWeightFinalSet(std::vector<StatePlysPair>* set)
+namespace detail
+{
+struct PlySortRecord
+{
+  PlySortRecord(const Ply& ply_)
+    : ply(ply_),
+      key((ply.pos << 16) | (ply.wIdx & 0xFFFF))
+  {}
+  inline bool operator<(const PlySortRecord& rhs) const
+  {
+    return key < rhs.key;
+  }
+  Ply ply;
+  int key;
+};
+}
+
+/// <summary> Set of plys stable with two weights. </summary>
+template <typename StorageType,
+          typename StorageAdapterFunc,
+          typename ExcludeFunc>
+int DoubleWeightStates(std::vector<StorageType>* set,
+                       StorageAdapterFunc* adaptFunc,
+                       ExcludeFunc* exclFunc)
 {
   assert(set);
-  set->clear();
-  int setFlattenedSize = 0;
+  assert(adaptFunc);
+  assert(exclFunc);
+  typedef
+    std::map<detail::PlySortRecord, std::map<detail::PlySortRecord, int> >
+    StateVisitedMap;
+  StateVisitedMap statesVisited;
 
-  // This is the set of states reachable from the suicidal one states.
+  // Set of all stable double weight states.
   State blankState;
   InitState(&blankState);
-  const Board initBoard = blankState.board;
-  ClearBoard(&blankState.board);
+  Board& board = blankState.board;
+  ClearBoard(&board);
   blankState.turn = State::Turn_Blue;
   std::vector<Ply> suicidalPlys;
   SuicidalPlys(blankState, &suicidalPlys);
-  // Erase all conflicts to initial board.
-  suicidalPlys.erase(std::remove_if(suicidalPlys.begin(), suicidalPlys.end(),
-                                    ConflictWithBoard(initBoard, &blankState)),
-                     suicidalPlys.end());
+  ExclBoardAdapter<ExcludeFunc> exclAdapter(exclFunc, &blankState);
+  suicidalPlys.erase(std::remove_if(suicidalPlys.begin(),
+                                    suicidalPlys.end(),
+                                    exclAdapter), suicidalPlys.end());
   // Now get all reachable states from the suicidal set. Since each suicidal
   // state is unique, then the set of reachable states for each suicidal state
   // is also unique.
-  set->resize(suicidalPlys.size());
-  std::vector<StatePlysPair>::iterator statePlys = set->begin();
-  Board boardChkPly;
-  ClearBoard(&boardChkPly);
+  std::vector<Ply> plys;
   for (std::vector<Ply>::const_iterator suicidePly = suicidalPlys.begin();
        suicidePly != suicidalPlys.end();
-       ++suicidePly, ++statePlys)
+       ++suicidePly)
   {
-    State& state = statePlys->first;
-    std::vector<Ply>& plys = statePlys->second;
-    state = blankState;
     // Mutate state to suicidal state.
-    DoPly(*suicidePly, &state);
+    DoPly(*suicidePly, &blankState);
     // Get possible plys from suicidal state.
-    PossiblePlys(state, &plys);
+    plys.clear();
+    PossiblePlys(blankState, &plys);
+    const size_t setNewSize = set->size() + plys.size();
+    set->reserve(setNewSize);
     // Only keep plys that do not stand on their own.
-    for (size_t plyIdx = 0; plyIdx < plys.size(); ++plyIdx)
+    for (std::vector<Ply>::const_iterator ply = plys.begin();
+         ply != plys.end();
+         ++ply)
     {
-      const int pos = plys[plyIdx].pos;
-      boardChkPly[pos] = CurrentPlayer(&state)->hand[plys[plyIdx].wIdx];
-      if (!Tipped(boardChkPly))
+      // Always key by lowest pos.
+      bool visited;
       {
-        plys[plyIdx] = Ply();
+        detail::PlySortRecord suicidePlySortRec(*suicidePly);
+        detail::PlySortRecord plySortRec(*ply);
+        if (suicidePly->pos < ply->pos)
+        {
+          visited = (statesVisited[suicidePlySortRec].count(plySortRec) > 0);
+          ++statesVisited[suicidePlySortRec][plySortRec];
+        }
+        else
+        {
+          visited = (statesVisited[plySortRec].count(suicidePlySortRec) > 0);
+          ++statesVisited[plySortRec][suicidePlySortRec];
+        }
       }
-      boardChkPly[pos] = Board::Empty;
+      if (!visited)
+      {
+        DoPly(*ply, &blankState);
+        if (!(*exclFunc)(board))
+        {
+          set->push_back((*adaptFunc)(board));
+        }
+        UndoPly(*ply, &blankState);
+      }
     }
-    plys.erase(std::remove_if(plys.begin(), plys.end(),
-                              StablePlyRemoveIfHelper()), plys.end());
-    setFlattenedSize += static_cast<int>(plys.size());
+    // Revert state.
+    UndoPly(*suicidePly, &blankState);
   }
-  return setFlattenedSize;
+  return static_cast<int>(set->size());
+}
 }
 
-// reissb -- 20111001 --
-//   Board evaluation function:
-//     * One point for every winning state still reachable times
-//       the inverse depth squared?
-//       Something like this would favor more reachable win states and also
-//       being closer to a win state.
-//     * MAXINT for a winning state.
-//     * Subtract inverse depth squared for every winning state of opponent
-//       still reachable.
-//     * -MAXINT for an opponent winning state.
-struct BoardEvaluationInverseDepthWinStates
+/// <summary> Get states with one weight. </summary>
+inline int SingleWeightStates(std::vector<Board>* set)
 {
-  struct BoardPosWeight
-  {
-    // Assumes 32-bit.
-    BoardPosWeight(const int p_, const Weight w_)
-      : key((p_ << 16) | w_), p(p_), w(w_)
-    {}
+  static detail::PassthroughAdapter<Board> s_passthrough;
+  static detail::ExcludeNoneFunc<Board> s_excl;
+  return detail::SingleWeightStates(set, &s_passthrough, &s_excl);
+}
 
-    inline bool operator<(const BoardPosWeight& rhs) const
+/// <summary> Get states with one weight that do not conflict with the
+///   given board.
+/// </summary>
+inline int SingleWeightStatesNoConflict(const Board& conflictBoard,
+                                        std::vector<Board>* set)
+{
+  static detail::PassthroughAdapter<Board> s_passthrough;
+  detail::ConflictBoard s_excl(conflictBoard);
+  return detail::SingleWeightStates(set, &s_passthrough, &s_excl);
+}
+
+/// <summary> Get states with two weights. </summary>
+inline int DoubleWeightStates(std::vector<Board>* set)
+{
+  static detail::PassthroughAdapter<Board> s_passthrough;
+  static detail::ExcludeNoneFunc<Board> s_excl;
+  return detail::DoubleWeightStates(set, &s_passthrough, &s_excl);
+}
+
+inline int DoubleWeightStatesNoConflictNoRemove(const Board& conflictBoard,
+                                                std::vector<Board>* set)
+{
+  static detail::PassthroughAdapter<Board> s_passthrough;
+  detail::DoubleWeightWinStateHelper s_excl(conflictBoard);
+  return detail::DoubleWeightStates(set, &s_passthrough, &s_excl);
+}
+
+namespace detail
+{
+inline void HashPosWeight(const int p, const int w, unsigned int* h)
+{
+  assert(Board::Empty != w);
+
+  // Encode position.
+  {
+    const unsigned int highorder = *h & 0xf8000000;
+    *h = *h << 5;
+    *h = *h ^ (highorder >> 27);
+    *h = *h ^ p;
+  }
+  // Encode weight.
+  {
+    const unsigned int highorder = *h & 0xf8000000;
+    *h = *h << 5;
+    *h = *h ^ (highorder >> 27);
+    *h = *h ^ w;
+  }
+}
+}
+
+unsigned int HashBoardCRC(const Board& board)
+{
+  // reissb -- 20111009 -- Taken from
+  //   http://www.cs.hmc.edu/~geoff/classes/hmc.cs070.200101/
+  //     homework10/hashfuncs.html
+  unsigned int h = 0;
+  int p = -Board::Size;
+  for (Board::const_iterator w = board.begin(); w != board.end(); ++w, ++p)
+  {
+    if (Board::Empty != *w)
     {
-      return key < rhs.key;
+      detail::HashPosWeight(p, *w, &h);
     }
-    inline bool operator==(const BoardPosWeight& rhs) const
+  }
+  return h;
+}
+
+unsigned int HashPosWeightPairsCRC(const int count,
+                                   const std::pair<int, int>* posWeightPairs)
+{
+  // reissb -- 20111009 -- Taken from
+  //   http://www.cs.hmc.edu/~geoff/classes/hmc.cs070.200101/
+  //     homework10/hashfuncs.html
+  unsigned int h = 0;
+  const std::pair<int, int>* posWeightPairsEnd = posWeightPairs + count;
+  for (const std::pair<int, int>* posWeightPair = posWeightPairs;
+       posWeightPair != posWeightPairsEnd;
+       ++posWeightPair)
+  {
+    detail::HashPosWeight(posWeightPair->first, posWeightPair->second, &h);
+  }
+  return h;
+}
+
+/// <summary> A key for a board state. </summary>
+struct BoardHashKey
+{
+  explicit BoardHashKey(const unsigned int key_) : key(key_) {}
+  BoardHashKey(const Board& board) : key(HashBoardCRC(board)) {}
+  inline bool operator<(const BoardHashKey& rhs) const
+  {
+    return key < rhs.key;
+  }
+  inline bool operator==(const BoardHashKey& rhs) const
+  {
+    return key == rhs.key;
+  }
+  inline bool operator!=(const BoardHashKey& rhs) const
+  {
+    return !(*this == rhs);
+  }
+  unsigned int key;
+};
+
+struct BoardEvaluationReachableWinStates
+{
+  typedef std::vector<BoardHashKey> BoardHashList;
+  struct NumWeightsWinStates
+  {
+    int numWeights;
+    BoardHashList states;
+  };
+  typedef std::vector<NumWeightsWinStates> WinStateList;
+
+  /// <summary> Adapt boards to keys. </summary>
+  struct BoardHashStorageAdapter
+  {
+    inline BoardHashKey operator()(const Board& board) const
     {
-      return rhs.key == key;
+      return BoardHashKey(board);
     }
-    
-    int key;
-    int p;
-    Weight w;
   };
 
-  typedef std::map<BoardPosWeight, bool> BoardPosMap;
-  typedef
-    std::map<BoardPosWeight, std::vector<BoardPosWeight> >
-    BoardPosPairsMap;
-
-  BoardPosWeight StateFirstBPW(const State& state) const
+  BoardEvaluationReachableWinStates(const State::Turn who_)
+    : who(who_),
+      redWinStates(),
+      totalRedWinStates(0),
+      blueWinStates(),
+      totalBlueWinStates(0)
   {
-    // Find BoardPosWeight for this state.
-    const Board& board = state.board;
-    int p = -Board::Size;
-    Board::const_iterator w = board.begin();
-    for (; w < board.end(); ++w, ++p)
+    State initState;
+    InitState(&initState);
+    // Get states where blue wins. These are all states where the board is
+    // balanced with one weight left.
+    {
+      blueWinStates.push_back(NumWeightsWinStates());
+      NumWeightsWinStates& singleWinStates = blueWinStates.back();
+      singleWinStates.numWeights = 1;
+      BoardHashList& states = singleWinStates.states;
+      BoardHashStorageAdapter adapter;
+      detail::ConflictBoard exclFunc(initState.board);
+      detail::SingleWeightStates(&states, &adapter, &exclFunc);
+      std::sort(states.begin(), states.end());
+      HPS_NTG_ASSERT_BOARD_HASH_NO_DUPS(states);
+      totalBlueWinStates = static_cast<int>(states.size());
+    }
+    // Get states where red wins. These are all states with two weights where
+    // the removal of either weight is suicidal.
+    {
+      redWinStates.push_back(NumWeightsWinStates());
+      NumWeightsWinStates& doubleWinStates = redWinStates.back();
+      doubleWinStates.numWeights = 2;
+      BoardHashList& states = doubleWinStates.states;
+      BoardHashStorageAdapter adapter;
+      detail::DoubleWeightWinStateHelper exclFunc(initState.board);
+      detail::DoubleWeightStates(&states, &adapter, &exclFunc);
+      std::sort(states.begin(), states.end());
+      HPS_NTG_ASSERT_BOARD_HASH_NO_DUPS(states);
+      totalRedWinStates = static_cast<int>(states.size());
+    }
+  }
+
+  /// <summary> Gather the occupied positions from a board. </summary>
+  static void CollectOccupiedPositions(const Board& board,
+                                       int* positionsOccupied,
+                                       int* positions)
+  {
+    assert(positionsOccupied);
+    assert(positions);
+    *positionsOccupied = 0;
+    int *posOut = positions;
+    int pos = -Board::Size;
+    for (Board::const_iterator w = board.begin(); w != board.end(); ++w, ++pos)
     {
       if (Board::Empty != *w)
       {
-        break;
+        *posOut = pos;
+        ++posOut;
+        ++(*positionsOccupied);
       }
     }
-    return BoardPosWeight (p, *w);
   }
 
   /// <summary> Count blue win states reachable from the given board. </summary>
-  int BlueWinStatesReachable(const Board& board) const
+  int WinStatesReachable(const Board& board, const WinStateList& winStates) const
   {
     int count = 0;
-    // Find all blue win states included in the board.
-    int p = -Board::Size;
-    Board::const_iterator w = board.begin();
-    for (; w < board.end(); ++w, ++p)
-    {
-      count += (Board::Empty != *w) &&
-               (blueWinsBoardMap.count(BoardPosWeight(p, *w)) > 0);
-    }
-    return count;
-  }
-
-  /// <summary> Count red win states reachable from the given board. </summary>
-  int RedWinStatesReachable(const Board& board) const
-  {
-    // Find all red win states included in the board.
-    std::vector<BoardPosWeight> bpws;
-    bpws.clear();
-    bpws.reserve(Board::Positions);
-    int p = -Board::Size;
-    Board::const_iterator w = board.begin();
-    for (; w < board.end(); ++w, ++p)
-    {
-      if (Board::Empty != *w)
-      {
-        bpws.push_back(BoardPosWeight(p, *w));
-      }
-    }
-    // Need at least one pair.
-    if (bpws.size() < 2)
-    {
-      return 0;
-    }
-    // Go through all combinations of the bpws.
-    int count = 0;
+    int positionsOccupied;
+    int positions[Board::Positions];
+    CollectOccupiedPositions(board, &positionsOccupied, positions);
     Combination cmb;
-    FastCombinationIterator cmbIter(bpws.size(), 2, 0);
+    std::pair<int, int> posWeightPairs[Board::Positions];
     unsigned long long m;
-    for (unsigned long long cmbIdx = 0;
-         cmbIdx < cmbIter.GetCombinationCount();
-         ++cmbIdx)
+    // Find all win states included in the board.
+    for (WinStateList::const_iterator winState = winStates.begin();
+         winState != winStates.end();
+         ++winState)
     {
-      cmbIter.Next(&m, &cmb);
-      assert(cmb[0] < cmb[1]);
-      const BoardPosWeight& first = bpws[cmb[0]];
-      if (redWinsBoardMap.count(first) > 0)
+      // Are there enough weights to satisfy these win states?
+      const int numWeights = winState->numWeights;
+      if (positionsOccupied < numWeights)
       {
-        const std::vector<BoardPosWeight>& scndList =
-          redWinsBoardMap.find(first)->second;
-        const BoardPosWeight& second = bpws[cmb[1]];
-        std::vector<BoardPosWeight>::const_iterator pairScnd =
-          std::lower_bound(scndList.begin(), scndList.end(), second);
-        count += (scndList.end() != pairScnd) && (*pairScnd == second);
+        continue;
       }
-    }
-    return count;
-  }
-
-  BoardEvaluationInverseDepthWinStates(const State::Turn who_)
-    : who(who_),
-      blueWinsBoardMap(),
-      redWinsBoardMap()
-  {
-    // Get states where blue wins.
-    {
-      StatePlysPair oneW;
-      OneWeightFinalSet(&oneW);
-      std::vector<Ply>& plys = oneW.second;
-      const Weight* hand = CurrentPlayer(&oneW.first)->hand;
-      for (std::vector<Ply>::const_iterator ply = plys.begin();
-           ply != plys.end();
-           ++ply)
+      // See if any of the win states are reachable. Make combinations of
+      // the filled board positions.
+      const BoardHashList& states = winState->states;
+      FastCombinationIterator cmbIter(positionsOccupied, numWeights, 0ULL);
+      const int numCmb = static_cast<int>(cmbIter.GetCombinationCount());
+      for (int cmbIdx = 0; cmbIdx < numCmb; ++cmbIdx)
       {
-        assert(0 == blueWinsBoardMap.count(BoardPosWeight(ply->pos,
-                                                          hand[ply->wIdx])));
-        blueWinsBoardMap[BoardPosWeight(ply->pos, hand[ply->wIdx])] = true;
-      }
-    }
-    // Get states where red wins.
-    {
-      std::vector<StatePlysPair> twoW;
-      TwoWeightFinalSet(&twoW);
-      // Construct a map from a BoardPosWeight to all of the corresponding
-      // BoardPosWeight that are in a winning state pair. Always address a pair
-      // using the lowest position occupied.
-      for (std::vector<StatePlysPair>::iterator statePlys = twoW.begin();
-           statePlys != twoW.end();
-           ++statePlys)
-      {
-        // Find the BoardPosWeight for the state.
-        State& state = statePlys->first;
-        const BoardPosWeight stateBPW = StateFirstBPW(state);
-        // Find the BoardPosWeight for each ply.
-        const Weight* hand = CurrentPlayer(&state)->hand;
-        const std::vector<Ply>& plys = statePlys->second;
-        for (std::vector<Ply>::const_iterator ply = plys.begin();
-             ply != plys.end();
-             ++ply)
+        // Get next combination and collect board pairs.
+        cmbIter.Next(&m, &cmb);
         {
-          const BoardPosWeight plyBPW(ply->pos, hand[ply->wIdx]);
-          assert(plyBPW.p != stateBPW.p);
-          if (plyBPW.p < stateBPW.p)
+          std::pair<int, int>* posWeightPair = posWeightPairs;
+          for (int cmbEleIdx = 0;
+               cmbEleIdx < numWeights;
+               ++cmbEleIdx, ++posWeightPair)
           {
-            redWinsBoardMap[plyBPW].push_back(stateBPW);
-          }
-          else
-          {
-            redWinsBoardMap[stateBPW].push_back(plyBPW);
+            const int pos = positions[cmb[cmbEleIdx]];
+            posWeightPair->first = pos;
+            posWeightPair->second = board[pos];
           }
         }
+        // See if this board is a win state.
+        const BoardHashKey boardKey(HashPosWeightPairsCRC(numWeights,
+                                                          posWeightPairs));
+        const bool winState = std::binary_search(states.begin(),
+                                                 states.end(),
+                                                 boardKey);
+        count += winState;
       }
-      // Sort all lists of BoardPosWeight.
-      for (BoardPosPairsMap::iterator pair = redWinsBoardMap.begin();
-           pair != redWinsBoardMap.end();
-           ++pair)
+    }
+    return count;
+  }
+
+  /// <summary> Compute win states from the current state. </summary>
+  void Update(const State& state,
+              const int invDepthBegin,
+              const int invDepthEnd)
+  {
+    assert(invDepthBegin < invDepthEnd);
+    const Board& currentBoard = state.board;
+
+    // Enumerate all possible combinations of weights at depth.
+    int positionsOccupied;
+    int positions[Board::Positions];
+    CollectOccupiedPositions(currentBoard, &positionsOccupied, positions);
+    Combination cmb;
+    unsigned long long m;
+    Board testBoard;
+    ClearBoard(&testBoard);
+    for (int invDepth = invDepthBegin;
+         (invDepth != invDepthEnd) && (positionsOccupied >= invDepth);
+         ++invDepth)
+    {
+      // Blue wins at odd depths and red at even.
+      WinStateList* winStates;
+      int* winStateCount;
+      if (invDepth & 1)
       {
-        std::vector<BoardPosWeight>& pairSecondBpws = pair->second;
-        std::sort(pairSecondBpws.begin(), pairSecondBpws.end());
+        winStates = &blueWinStates;
+        winStateCount = &totalBlueWinStates;
+      }
+      else
+      {
+        winStates = &redWinStates;
+        winStateCount = &totalRedWinStates;
+      }
+      // See if we have computed for this depth.
+      // reissb -- 20111009 -- Just assert that we have not.
+      for (WinStateList::iterator depthState = winStates->begin();
+           depthState != winStates->end();
+           ++depthState)
+      {
+        assert(depthState->numWeights != invDepth);
+      }
+      winStates->push_back(NumWeightsWinStates());
+      NumWeightsWinStates& depthState = winStates->back();
+      depthState.numWeights = invDepth;
+      BoardHashList& states = depthState.states;
+      // Enumerate the board weight combinations.
+      FastCombinationIterator cmbIter(positionsOccupied, invDepth, 0);
+      const int cmbCount = static_cast<int>(cmbIter.GetCombinationCount());
+      for (int cmbIdx = 0; cmbIdx < cmbCount; ++cmbIdx)
+      {
+        cmbIter.Next(&m, &cmb);
+        // Build the board;
+        for (Combination::const_iterator cmbEle = cmb.begin();
+             cmbEle != cmb.end();
+             ++cmbEle)
+        {
+          const int pos = positions[*cmbEle];
+          assert(Board::Empty == testBoard[pos]);
+          testBoard[pos] = currentBoard[pos];
+        }
+        const bool stable = !Tipped(testBoard);
+        if (stable)
+        {
+          // See if I can't remove a weight.
+          bool winState = true;
+          for (Combination::const_iterator cmbEle = cmb.begin();
+               cmbEle != cmb.end();
+               ++cmbEle)
+          {
+            const int pos = positions[*cmbEle];
+            testBoard[pos] = Board::Empty;
+            const bool tipped = !Tipped(testBoard);
+            testBoard[pos] = currentBoard[pos];
+            if (!tipped)
+            {
+              winState = false;
+              break;
+            }
+          }
+          if (winState)
+          {
+            states.push_back(BoardHashKey(testBoard));
+            ++(*winStateCount);
+          }
+        }
+        // Reset the board.
+        for (Combination::const_iterator cmbEle = cmb.begin();
+             cmbEle != cmb.end();
+             ++cmbEle)
+        {
+          const int pos = positions[*cmbEle];
+          assert(Board::Empty != testBoard[pos]);
+          testBoard[pos] = Board::Empty;
+        }
+      }
+      if (!states.empty())
+      {
+        std::sort(states.begin(), states.end());
+        HPS_NTG_ASSERT_BOARD_HASH_NO_DUPS(states);
+      }
+      else
+      {
+        winStates->pop_back();
       }
     }
   }
 
-  float RandScale() const
-  {
-    int base = RandBound(101);
-    float frac = static_cast<float>(base) / 100.0f;
-    return frac * 10.0f;
-  }
-  
   /// <summary> Score a board. </summary>
   int operator()(const State& state) const
   {
     assert(!Tipped(state.board));
+
     // Count win states reachable.
-    const int redWinStatesReachable = RedWinStatesReachable(state.board);
-    const int blueWinStatesReachable = BlueWinStatesReachable(state.board);
-    //const int torqueL = TorqueL(state.board);
-    //const int torqueR = TorqueR(state.board);
+    const int redWinStatesReachable = WinStatesReachable(state.board,
+                                                         redWinStates);
+    const int blueWinStatesReachable = WinStatesReachable(state.board,
+                                                          blueWinStates);
+    // If we have no information about win states...
+    const bool blind = (redWinStatesReachable + blueWinStatesReachable) > 0;
     int score;
     // I am red?
     if (State::Turn_Red == who)
     {
-      // Return score based on win states.
-      if ((1 == redWinStatesReachable) && (0 == blueWinStatesReachable))
+      score = redWinStatesReachable - blueWinStatesReachable;
+      if (blind)
       {
-        score = std::numeric_limits<int>::max();
-      }
-      else if ((0 == redWinStatesReachable) && (1 == blueWinStatesReachable))
-      {
-        score = std::numeric_limits<int>::min();
-      }
-      else
-      {
-        //score = redWinStatesReachable + 1;
-        score = (redWinStatesReachable + 1) *
-                (redWinStatesReachable - blueWinStatesReachable);
-        score = static_cast<int>(score * RandScale());
-        //score *= (0 == (torqueR * torqueL)) ? score: 1;
+        score = -blueWinStatesReachable;
       }
     }
     // I am blue.
     else
     {
-      // Return score based on win states.
-      if ((1 == redWinStatesReachable) && (0 == blueWinStatesReachable))
+      score = blueWinStatesReachable - redWinStatesReachable;
+      if (blind)
       {
-        score = std::numeric_limits<int>::min();
-      }
-      else if ((0 == redWinStatesReachable) && (1 == blueWinStatesReachable))
-      {
-        score = std::numeric_limits<int>::max();
-      }
-      else
-      {
-        //score = blueWinStatesReachable + 1;
-        score = (blueWinStatesReachable + 1) *
-                (blueWinStatesReachable - redWinStatesReachable);
-        score = static_cast<int>(score * RandScale());
-        //score *= (0 == (torqueR * torqueL)) ? score: 1;
-
+        score = -redWinStatesReachable;
       }
     }
     return score;
   }
 
+  /// <summary> The player for whom we evaluate the board state. </sumamry>
   State::Turn who;
-
-  BoardPosMap blueWinsBoardMap;
-  BoardPosPairsMap redWinsBoardMap;
-
+  /// <summary> List of red win states. </summary>
+  WinStateList redWinStates;
+  int totalRedWinStates;
+  /// <summary> List of blue win states. </summary>
+  WinStateList blueWinStates;
+  int totalBlueWinStates;
 };
 
 }

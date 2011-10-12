@@ -1,72 +1,102 @@
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.BufferedReader;
-import java.io.IOException;
+import java.io.*;
+import java.util.*;
+
 class Contestant extends NoTippingPlayer 
 {
+  private static Process ntgCppProcess = null;
+  // STDIN for the no_tipping_game process.
+  private static BufferedReader ntgCppIn = null;
+  // STDOUT for the no_tipping_game process.
+  private static BufferedWriter ntgCppOut = null;
+
   public Contestant(int port) 
   {
+    // Note that the ctor of NoTippingPlayer is a modal process. Execution does
+    // not return to this point until the game is complete.
     super(port);
-    System.out.println("Starting on :" + port);
   }
+
   protected String process(String command) 
   {
-    String move=null;
-    Runtime runTime = Runtime.getRuntime();
-    Process p = null;
+    String move = null;
     try 
     {
-      System.out.println("Running C++ program.");
-      p = runTime.exec("./no_tipping_game");
-
       String[] lines = command.split("\n");
-      java.io.PrintWriter cppStdin = new java.io.PrintWriter(p.getOutputStream(), true);
       
+      // Write to process pipe.
+      System.out.println("Pipe to no_tipping_game...");
       for(String s : lines)
+      {
         System.out.println(s);
-
-      for(String s : lines)
-        cppStdin.println(s);
-      cppStdin.close();
-
-      //cppStdin.println("STATE END");
-      
-      p.waitFor();
+        ntgCppOut.write(s + "\n");
+      }
+      ntgCppOut.flush();
+      // Read response.
+      System.out.println("Reading move...");
+      move = ntgCppIn.readLine().trim();
+      System.out.println(move);
+      System.out.flush();
     } 
     catch (Exception e) 
     {
-      System.out.println("error executing " + command);
+      System.out.println("Error performing PIPE operations: " + e.getMessage());
     }
-    try
-    {
-      System.out.println("Capturing output");
-      InputStream in = p.getInputStream();
-      InputStreamReader insr = new InputStreamReader(in);
-      BufferedReader br = new BufferedReader(insr);
-      String output;
-      StringBuffer sb = new StringBuffer();
-      while((output=br.readLine())!=null)
-      {
-        sb.append(output+"\n");
-      }
-      insr.close();
-      move = sb.toString().trim();
-    }
-    catch(IOException ex)
-    {
-      System.out.println("Error reading the stream: "+ex.getMessage());
-    }
-    System.out.println("Output: " + move);
     return move;
+  }
+
+  public static boolean openNtgProcess()
+  {
+    if (null == ntgCppProcess)
+    {
+      assert(null == ntgCppIn);
+      assert(null == ntgCppOut);
+      try
+      {
+        System.out.println("Starting no_tipping_game process...");
+        ntgCppProcess = Runtime.getRuntime().exec("./no_tipping_game");
+        ntgCppIn = new BufferedReader(new InputStreamReader(ntgCppProcess.getInputStream()));
+        ntgCppOut = new BufferedWriter(new OutputStreamWriter(ntgCppProcess.getOutputStream()));
+        return true;
+      }
+      catch (Exception e)
+      {
+        System.out.println("Exception starting no_tipping_game: " +
+                           e.getMessage());
+        return false;
+      }
+    }
+    else
+    {
+      assert(null != ntgCppIn);
+      assert(null != ntgCppOut);
+      return true;
+    }
+  }
+
+  public static void killNtgProcess()
+  {
+    ntgCppProcess.destroy();
+    ntgCppIn = null;
+    ntgCppOut = null;
+    ntgCppProcess = null;
   }
 
   public static void main(String[] args) throws Exception 
   {
-    if(args.length==1)
+    if (1 == args.length)
     {
-      int port = Integer.parseInt(args[0]);
-      System.out.println("Creating server.");
-      new Contestant(port);
+      if (openNtgProcess())
+      {
+        System.out.println("Starting game.");
+        int port = Integer.parseInt(args[0]);
+        new Contestant(port);
+        System.out.println("Game completed.");
+        killNtgProcess();
+      }
+      else
+      {
+        System.out.println("Error executing no_tipping_game.");
+      }
     }
     else
     {
@@ -74,3 +104,4 @@ class Contestant extends NoTippingPlayer
     }
   }
 }
+
