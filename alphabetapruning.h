@@ -58,25 +58,20 @@ struct AlphaBetaPruning
     assert(params && state && evalFunc && ply);
     assert(!Tipped(state->board));
 
-    int maxDepth = params->maxDepthAdding;
-    int& depth = params->depth;
-    // See if we are at the end of the adding phase.
-    bool completedAddingPhase = false;
-    int removingDepth = -1;
+    int maxDepth;
+    if (State::Phase_Adding == state->phase)
     {
-      // Are the weight sums ahead of or with the depth?
-      const int remainSum = state->red.remain + state->blue.remain;
-      if ((remainSum <= 0) && (-remainSum >= depth))
-      {
-        maxDepth = params->maxDepthRemoving;
-        completedAddingPhase = true;
-        removingDepth = -remainSum - depth + 1;
-      }
+      maxDepth = params->maxDepthAdding;
     }
+    else
+    {
+      maxDepth = params->maxDepthRemoving;
+    }
+    int& depth = params->depth;
     assert(maxDepth > 1);
     assert(depth < maxDepth);
-//    std::cout << "AlphaBetaPruning::Run() : maxDepth = " << maxDepth
-//              << "." << std::endl;
+    std::cout << "AlphaBetaPruning::Run() : maxDepth = " << maxDepth
+              << "." << std::endl;
     ++depth;
 
     // Get the children of the current state.
@@ -147,7 +142,7 @@ struct AlphaBetaPruning
     --depth;
     if (std::numeric_limits<int>::min() == minimax)
     {
-//      std::cout << "No guaranteed victory." << std::endl;
+      std::cout << "No guaranteed victory." << std::endl;
       // Select ply based on heuristic.
       DoPly(plys.front(), state);
       int bestPlyScore = (*evalFunc)(*state);

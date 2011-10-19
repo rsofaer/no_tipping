@@ -180,13 +180,7 @@ struct MinimaxDepthHeuristics
       player->params.maxDepthRemoving = 3;
 #endif
     }
-    else if (turns >= 20)
-    {
-#if NDEBUG
-      player->params.maxDepthAdding = 5;
-#endif
-    }
-    else if (turns >= 13)
+    else if (turns >= 17)
     {
 #if NDEBUG
       player->params.maxDepthAdding = 4;
@@ -248,10 +242,15 @@ struct AlphaBetaPruningDepthHeuristics
     assert(player);
 
     // Update win states when phase is changing.
-    if ((turns > State::NumAdded) && (turns <= (State::NumAdded + 2)))
+    //if ((turns > State::NumAdded) && (turns <= (State::NumAdded + 2)))
+    if ((turns > (State::NumAdded + 0)) && (turns <= (State::NumAdded + 2)))
     {
-      assert(State::Phase_Removing == state.phase);
-      player->evalFunc.Update(state, 3, 11);
+      //assert(State::Phase_Removing == state.phase);
+      player->evalFunc.Update(state, 1, 5);
+      std::cout << "Red win states: "
+                << player->evalFunc.totalRedWinStates
+                << ", Blue win states: "
+                << player->evalFunc.totalBlueWinStates << std::endl;
     }
     // Select minimax depth based on moves.
     if (turns > (State::NumAdded + 2))
@@ -270,12 +269,24 @@ struct AlphaBetaPruningDepthHeuristics
       player->params.maxDepthRemoving = 3;
 #endif
     }
+    else if (turns > 16)
+    {
+#if NDEBUG
+      player->evalFunc.Update(state, 3, 5);
+      player->params.maxDepthAdding = 4;
+#else
+      player->evalFunc.Update(state, 3, 5);
+      player->params.maxDepthAdding = 2;
+#endif
+    }
     else
     {
 #if NDEBUG
+      player->evalFunc.Update(state, 3, 7);
       player->params.maxDepthAdding = 4;
 #else
-      player->params.maxDepthAdding = 3;
+      player->evalFunc.Update(state, 3, 5);
+      player->params.maxDepthAdding = 2;
 #endif
     }
 //    std::cout << "player->params.maxDepthAdding = "

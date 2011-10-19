@@ -568,12 +568,16 @@ struct BoardEvaluationReachableWinStates
         winStateCount = &totalRedWinStates;
       }
       // See if we have computed for this depth.
-      // reissb -- 20111009 -- Just assert that we have not.
-      for (WinStateList::iterator depthState = winStates->begin();
-           depthState != winStates->end();
-           ++depthState)
+      for (WinStateList::iterator chkDepth = winStates->begin();
+           chkDepth != winStates->end();
+           ++chkDepth)
       {
-        assert(depthState->numWeights != invDepth);
+        if (chkDepth->numWeights == invDepth)
+        {
+          *winStateCount -= chkDepth->states.size();
+          winStates->erase(chkDepth);
+          break;
+        }
       }
       winStates->push_back(NumWeightsWinStates());
       NumWeightsWinStates& depthState = winStates->back();
@@ -605,7 +609,7 @@ struct BoardEvaluationReachableWinStates
           {
             const int pos = positions[*cmbEle];
             testBoard[pos] = Board::Empty;
-            const bool tipped = !Tipped(testBoard);
+            const bool tipped = Tipped(testBoard);
             testBoard[pos] = currentBoard[pos];
             if (!tipped)
             {

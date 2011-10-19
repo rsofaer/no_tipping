@@ -58,21 +58,16 @@ struct Minimax
     assert(params && state && evalFunc && ply);
     assert(!Tipped(state->board));
 
-    int maxDepth = params->maxDepthAdding;
-    int& depth = params->depth;
-    // See if we are at the end of the adding phase.
-    bool completedAddingPhase = false;
-    int removingDepth = -1;
+    int maxDepth;
+    if (State::Phase_Adding == state->phase)
     {
-      // Are the weight sums ahead of or with the depth?
-      const int remainSum = state->red.remain + state->blue.remain;
-      if ((remainSum <= 0) && (-remainSum >= depth))
-      {
-        maxDepth = params->maxDepthRemoving;
-        completedAddingPhase = true;
-        removingDepth = -remainSum - depth + 1;
-      }
+      maxDepth = params->maxDepthAdding;
     }
+    else
+    {
+      maxDepth = params->maxDepthRemoving;
+    }
+    int& depth = params->depth;
     assert(maxDepth > 1);
     assert(depth < maxDepth);
     ++depth;
