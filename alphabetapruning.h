@@ -135,9 +135,9 @@ struct AlphaBetaPruning
             threadParams.bestPlyIdx = plyIdx;
             if (std::numeric_limits<int>::max() == minimax)
             {
-              std::cout << "Thread " << threadIdx << " found victoryIsMine on "
-                        << "ply " << plyIdx << " of " << plys.size()
-                        << "." << std::endl;
+//              std::cout << "Thread " << threadIdx << " found victoryIsMine on "
+//                        << "ply " << plyIdx << " of " << plys.size()
+//                        << "." << std::endl;
               victoryIsMine = true;
             }
           }

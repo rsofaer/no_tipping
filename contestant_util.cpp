@@ -4,15 +4,19 @@
 #include <string>
 #include <sstream>
 
+#ifdef WIN32
 #define NOMINMAX
-#include "windows.h"
+#include <windows.h>
+#else
+#include <time.h>
+#endif
 
 namespace hps
 {
 namespace ntg
 {
 
-bool BuildState(std::istream &input, State* stateBuffer)
+bool BuildState(std::istream& input, State* stateBuffer)
 {
   assert(stateBuffer);
   enum { MaxEmptyLines = 10, };
@@ -32,12 +36,22 @@ bool BuildState(std::istream &input, State* stateBuffer)
     const bool lineGood = ReadMaxEmptyLines(input, MaxEmptyLines, &curLine);
     if (!lineGood)
     {
+#ifdef WIN32
       Sleep(20);
+#else
+      timespec t;
+      {
+        t.tv_sec = 0;
+        t.tv_nsec = 20 * 1000 * 1000;
+      }
+      nanosleep(&t, NULL);
+#endif
     }
-    if (!input.good())
+    if (input.bad())
     {
       return false;
     }
+    input.clear();
   } while(curLine.empty());
   //std::cout << curLine << "\n";
   if( "ADDING" == curLine)
@@ -58,12 +72,22 @@ bool BuildState(std::istream &input, State* stateBuffer)
       const bool lineGood = ReadMaxEmptyLines(input, MaxEmptyLines, &curLine);
       if (!lineGood)
       {
+#ifdef WIN32
         Sleep(20);
+#else
+        timespec t;
+        {
+          t.tv_sec = 0;
+          t.tv_nsec = 20 * 1000 * 1000;
+        }
+        nanosleep(&t, NULL);
+#endif
       }
-      if (!input.good())
+      if (input.bad())
       {
         return false;
       }
+      input.clear();
     } while(curLine.empty());
     //std::cout << curLine << "\n";
     if("STATE END" == curLine)

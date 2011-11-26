@@ -3,6 +3,9 @@
 #include "contestant_util.h"
 #include "ntg.h"
 #include "gtest/gtest.h"
+#include "gtest/gtest.h"
+#include <fstream>
+#include <omp.h>
 
 namespace _hps_no_tipping_contestant_util_gtest_h_
 {
@@ -32,13 +35,34 @@ const char* stateString = "ADDING\n"
                           "1 -4 Green 3\n"
                           "STATE END\n";
 
-TEST(BuildState, contestant_util)
+TEST(contestant_util, BuildState)
 {
   std::stringstream ssStateString(stateString);
   State state;
   ASSERT_TRUE(BuildState(ssStateString, &state));
 }
 
+TEST(contestant_util, CalculateMoveWrapper)
+{
+  omp_set_num_threads(omp_get_num_procs());
+  enum { InputFileSuffixMin = 1, };
+  enum { InputFileSuffixMax = 7, };
+
+  for (int inputIdx = InputFileSuffixMin;
+       inputIdx <= InputFileSuffixMax;
+       ++inputIdx)
+  {
+    std::stringstream ssInputFilename;
+    ssInputFilename << "input" << inputIdx;
+    std::ifstream file(ssInputFilename.str().c_str());
+    ASSERT_TRUE(file.good());
+    State state;
+    BuildState(file, &state);
+    const std::string move = CalculateMoveWrapper(&state);
+    ASSERT_FALSE(move.empty());
+  }
 }
 
-#endif _HPS_NO_TIPPING_CONTESTANT_UTIL_GTEST_H_
+}
+
+#endif //_HPS_NO_TIPPING_CONTESTANT_UTIL_GTEST_H_

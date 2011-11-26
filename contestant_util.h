@@ -10,7 +10,7 @@ namespace ntg
 {
 struct State;
 
-inline bool ReadMaxEmptyLines(std::istream &input,
+inline bool ReadMaxEmptyLines(std::istream& input,
                               const int maxEmptyLines,
                               std::string* curLine)
 {
@@ -35,4 +35,4 @@ std::string CalculateMoveWrapper(State* stateBuffer);
 using namespace ntg;
 }
 
-#endif _HPS_NO_TIPPING_GAME_NTG_H_
+#endif //_HPS_NO_TIPPING_GAME_NTG_H_

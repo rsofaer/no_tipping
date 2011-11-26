@@ -4,10 +4,10 @@ import java.util.*;
 class Contestant extends NoTippingPlayer 
 {
   private static Process ntgCppProcess = null;
-  // STDIN for the no_tipping_game process.
-  private static BufferedReader ntgCppIn = null;
-  // STDOUT for the no_tipping_game process.
-  private static BufferedWriter ntgCppOut = null;
+  // STDIN for the contestant process.
+  private static BufferedWriter ntgCppStdin = null;
+  // STDOUT for the contestant process.
+  private static BufferedReader ntgCppStdout = null;
 
   public Contestant(int port) 
   {
@@ -24,21 +24,22 @@ class Contestant extends NoTippingPlayer
       String[] lines = command.split("\n");
       
       // Write to process pipe.
-      System.out.println("Pipe to no_tipping_game...");
+      System.out.println("Process move by writing to contestant...");
       for(String s : lines)
       {
         System.out.println(s);
-        ntgCppOut.write(s + "\n");
+        ntgCppStdin.write(s + "\n");
       }
       // The parent framework removes STATE END.
       {
         String s = "STATE END";
         System.out.println(s);
-        ntgCppOut.write(s + "\n");
+        ntgCppStdin.write(s + "\n");
       }
+      ntgCppStdin.flush();
       // Read response.
-      System.out.println("Reading move...");
-      move = ntgCppIn.readLine().trim();
+      System.out.println("Reading move from contestant...");
+      move = ntgCppStdout.readLine().trim();
       System.out.println(move);
       System.out.flush();
     } 
@@ -53,27 +54,29 @@ class Contestant extends NoTippingPlayer
   {
     if (null == ntgCppProcess)
     {
-      assert(null == ntgCppIn);
-      assert(null == ntgCppOut);
+      assert(null == ntgCppStdin);
+      assert(null == ntgCppStdout);
       try
       {
-        System.out.println("Starting no_tipping_game process...");
-        ntgCppProcess = Runtime.getRuntime().exec("./no_tipping_game");
-        ntgCppIn = new BufferedReader(new InputStreamReader(ntgCppProcess.getInputStream()));
-        ntgCppOut = new BufferedWriter(new OutputStreamWriter(ntgCppProcess.getOutputStream()));
+        System.out.println("Starting contestant process...");
+        ntgCppProcess = Runtime.getRuntime().exec("./contestant");
+        OutputStream stdin = ntgCppProcess.getOutputStream();
+        InputStream stdout = ntgCppProcess.getInputStream();
+        ntgCppStdin = new BufferedWriter(new OutputStreamWriter(stdin));
+        ntgCppStdout = new BufferedReader(new InputStreamReader(stdout));
         return true;
       }
       catch (Exception e)
       {
-        System.out.println("Exception starting no_tipping_game: " +
+        System.out.println("Exception starting contestant: " +
                            e.getMessage());
         return false;
       }
     }
     else
     {
-      assert(null != ntgCppIn);
-      assert(null != ntgCppOut);
+      assert(null != ntgCppStdin);
+      assert(null != ntgCppStdout);
       return true;
     }
   }
@@ -81,8 +84,8 @@ class Contestant extends NoTippingPlayer
   public static void killNtgProcess()
   {
     ntgCppProcess.destroy();
-    ntgCppIn = null;
-    ntgCppOut = null;
+    ntgCppStdin = null;
+    ntgCppStdout = null;
     ntgCppProcess = null;
   }
 
@@ -100,7 +103,7 @@ class Contestant extends NoTippingPlayer
       }
       else
       {
-        System.out.println("Error executing no_tipping_game.");
+        System.out.println("Error executing contestant.");
       }
     }
     else

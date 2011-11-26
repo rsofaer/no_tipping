@@ -2,14 +2,11 @@ cmake_minimum_required(VERSION 2.8)
 
 file(GLOB HEADERS "*.h")
 
-# Enable OpenMP in UNIX.
-# Enable multicore builds in MSVC.
+# Enable OpenMP.
 find_package(OpenMP REQUIRED)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 if(UNIX)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-else(UNIX)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif(UNIX)
 
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
@@ -38,16 +35,19 @@ set(SRCS
 add_executable(contestant ${SRCS} ${HEADERS})
 target_link_libraries(contestant contestant_util)
 install(TARGETS contestant RUNTIME DESTINATION bin/no_tipping)
+file(TO_NATIVE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/*.java JAVA_SRCS_PATH)
 if(WIN32)
   add_custom_command(TARGET contestant
                      POST_BUILD
                      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                     COMMAND copy /Y ${JAVA_SRCS_PATH} .
                      COMMAND del /F /Q *.class
                      COMMAND javac *.java)
 else(WIN32)
   add_custom_command(TARGET contestant
                      POST_BUILD
                      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                     COMMAND cp -f ${JAVA_SRCS_PATH} .
                      COMMAND rm -f *.class
                      COMMAND javac *.java)
 endif(WIN32)
@@ -74,7 +74,7 @@ if(HPS_GTEST_ENABLED)
   add_test(contestant_gtest contestant_gtest)
 endif(HPS_GTEST_ENABLED)
 
-file(GLOB JAVA_SRCS "*.java")
-file(COPY ${JAVA_SRCS} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+file(GLOB INPUT_EXAMPLES "input*")
+file(COPY ${INPUT_EXAMPLES} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
 project(ntg)

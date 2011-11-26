@@ -120,7 +120,7 @@ TEST(NoTippingGames, RandomVsRandom)
   EXPECT_NEAR(0.5f, redWinProportion, 0.05f);
 }
 
-TEST(NoTippingGames, RandomVsMinimax)
+TEST(NoTippingGames, DISABLED_RandomVsMinimax)
 {
   enum { Games = 5, };
   int redWins;
