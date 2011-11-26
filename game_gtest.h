@@ -1,5 +1,6 @@
 #ifndef _NO_TIPPING_GAME_GAME_GTEST_H_
 #define _NO_TIPPING_GAME_GAME_GTEST_H_
+#include "ntg.h"
 #include "ntg_players.h"
 #include "ntg_gtest_operators.h"
 #include "timer.h"
@@ -51,29 +52,12 @@ void LogWinner(const State& state)
   }
 }
 
-/// <summary> Default heuristic is no heuristic. </summary>
-struct NoHeuristic
-{
-  template <typename PlayerType>
-  inline void operator()(const int, const State&, PlayerType*) const
-  { }
-};
-
 typedef std::map<Ply, int> PlyCountMap;
 template <typename RedPlayer, typename BluePlayer, int Trials>
 struct PlayerBattle
 {
-  /// <summary> Play without heuristics. </summary>
-  inline static void Play(int* redWins)
-  {
-    Play(redWins, NoHeuristic(), NoHeuristic());
-  }
-
   /// <summary> Play with heuristics. </summary>
-  template <typename RedHeuristic, typename BlueHeuristic>
-  static void Play(int* redWins,
-                   const RedHeuristic redHeuristic,
-                   const BlueHeuristic blueHeuristic)
+  static void Play(int* redWins)
   {
     Timer timer;
     *redWins = 0;
@@ -94,7 +78,6 @@ struct PlayerBattle
         if (State::Turn_Red == state.turn)
         {
           timer.Reset();
-          redHeuristic(turns, state, &red);
           red.NextPly(&state, &ply);
           moveTime = timer.GetTime();
           redTime += moveTime;
@@ -102,7 +85,6 @@ struct PlayerBattle
         else
         {
           timer.Reset();
-          blueHeuristic(turns, state, &blue);
           blue.NextPly(&state, &ply);
           moveTime = timer.GetTime();
           blueTime += moveTime;
@@ -126,229 +108,94 @@ struct PlayerBattle
   }
 };
 
-//TEST(RandomVsRandom, NoTippingGames)
-//{
-//  enum { Games = 100, };
-//  std::cout << "Playing " << Games << " games." << std::endl;
-//  int redWins;
-//  PlayerBattle<RandomPlayer, RandomPlayer, Games>::Play(&redWins);
-//  std::cout << "Red won " << redWins << " times out of "
-//            << Games << " games." << std::endl;
-//  const float redWinProportion = static_cast<float>(redWins) / Games;
-//  EXPECT_NEAR(0.5f, redWinProportion, 0.05f);
-//}
-
-//TEST(RandomVsMonteCarlo, NoTippingGames)
-//{
-//  enum { Games = 100, };
-//  int redWins;
-//  PlayerBattle<RandomPlayer, MonteCarloPlayer, Games>::Play(&redWins);
-//  std::cout << "Red won " << redWins << " times out of "
-//            << Games << " games." << std::endl;
-//  const float redWinProportion = static_cast<float>(redWins) / Games;
-//  EXPECT_NEAR(1.0f, redWinProportion, 0.01f);
-//}
-
-struct MinimaxDepthHeuristics
-{
-  inline void operator()(const int turns,
-                         const State& state,
-                         MinimaxPlayer* player) const
-  {
-    assert(player);
-
-    // Update win states when phase is changing.
-    if ((turns > State::NumAdded) && (turns <= (State::NumAdded + 2)))
-    {
-      assert(State::Phase_Removing == state.phase);
-      player->evalFunc.Update(state, 3, 7);
-    }
-    // Select minimax depth based on moves.
-    if (turns > (State::NumAdded + 4))
-    {
-      player->params.maxDepthRemoving += 2;
-    }
-    else if (turns > (State::NumAdded + 2))
-    {
-      ++player->params.maxDepthRemoving;
-    }
-    else if (turns > State::NumAdded)
-    {
-#if NDEBUG
-      player->params.maxDepthRemoving = 4;
-#else
-      player->params.maxDepthRemoving = 3;
-#endif
-    }
-    else if (turns >= 17)
-    {
-#if NDEBUG
-      player->params.maxDepthAdding = 4;
-#endif
-    }
-    else
-    {
-#if NDEBUG
-      player->params.maxDepthAdding = 3;
-#else
-      player->params.maxDepthAdding = 2;
-#endif
-    }
-//    std::cout << "player->params.maxDepthAdding = "
-//              << player->params.maxDepthAdding
-//              << "." << std::endl;
-//    std::cout << "player->params.maxDepthRemoving = "
-//              << player->params.maxDepthRemoving
-//              << "." << std::endl;
-  }
-};
-
-//TEST(RandomVsMinimax, NoTippingGames)
-//{
-//  enum { Games = 100, };
-//  int redWins;
-//  PlayerBattle<RandomPlayer,
-//               MinimaxPlayer,
-//               Games>::Play(&redWins,
-//                            NoHeuristic(),
-//                            MinimaxDepthHeuristics());
-//  std::cout << "Red won " << redWins << " times out of "
-//            << Games << " games." << std::endl;
-//  const float redWinProportion = static_cast<float>(redWins) / Games;
-//  EXPECT_NEAR(0.0f, redWinProportion, 0.01f);
-//}
-
-//TEST(MinimaxVsRandom, NoTippingGames)
-//{
-//  enum { Games = 100, };
-//  int redWins;
-//  PlayerBattle<MinimaxPlayer,
-//               RandomPlayer,
-//               Games>::Play(&redWins,
-//                            MinimaxDepthHeuristics(),
-//                            NoHeuristic());
-//  std::cout << "Red won " << redWins << " times out of "
-//            << Games << " games." << std::endl;
-//  const float redWinProportion = static_cast<float>(redWins) / Games;
-//  EXPECT_NEAR(1.0f, redWinProportion, 0.01f);
-//}
-
-struct AlphaBetaPruningDepthHeuristics
-{
-  inline void operator()(const int turns,
-                         const State& state,
-                         AlphaBetaPruningPlayer* player) const
-  {
-    assert(player);
-
-    // Update win states when phase is changing.
-    //if ((turns > State::NumAdded) && (turns <= (State::NumAdded + 2)))
-    if ((turns > (State::NumAdded + 0)) && (turns <= (State::NumAdded + 2)))
-    {
-      //assert(State::Phase_Removing == state.phase);
-      player->evalFunc.Update(state, 1, 5);
-      std::cout << "Red win states: "
-                << player->evalFunc.totalRedWinStates
-                << ", Blue win states: "
-                << player->evalFunc.totalBlueWinStates << std::endl;
-    }
-    // Select minimax depth based on moves.
-    if (turns > (State::NumAdded + 2))
-    {
-#if NDEBUG
-      player->params.maxDepthRemoving = State::MaxPlys;
-#else
-      player->params.maxDepthRemoving = 4;
-#endif
-    }
-    else if (turns > State::NumAdded)
-    {
-#if NDEBUG
-      player->params.maxDepthRemoving = 7;
-#else
-      player->params.maxDepthRemoving = 3;
-#endif
-    }
-    else if (turns > 16)
-    {
-#if NDEBUG
-      player->evalFunc.Update(state, 3, 5);
-      player->params.maxDepthAdding = 4;
-#else
-      player->evalFunc.Update(state, 3, 5);
-      player->params.maxDepthAdding = 2;
-#endif
-    }
-    else
-    {
-#if NDEBUG
-      player->evalFunc.Update(state, 3, 7);
-      player->params.maxDepthAdding = 4;
-#else
-      player->evalFunc.Update(state, 3, 5);
-      player->params.maxDepthAdding = 2;
-#endif
-    }
-//    std::cout << "player->params.maxDepthAdding = "
-//              << player->params.maxDepthAdding
-//              << "." << std::endl;
-//    std::cout << "player->params.maxDepthRemoving = "
-//              << player->params.maxDepthRemoving
-//              << "." << std::endl;
-  }
-};
-
-TEST(RandomVsAlphaBetaPruning, NoTippingGames)
+TEST(NoTippingGames, RandomVsRandom)
 {
   enum { Games = 100, };
+  std::cout << "Playing " << Games << " games." << std::endl;
   int redWins;
-  PlayerBattle<RandomPlayer,
-               AlphaBetaPruningPlayer,
-               Games>::Play(&redWins,
-                            NoHeuristic(),
-                            AlphaBetaPruningDepthHeuristics());
+  PlayerBattle<RandomPlayer, RandomPlayer, Games>::Play(&redWins);
+  std::cout << "Red won " << redWins << " times out of "
+            << Games << " games." << std::endl;
+  const float redWinProportion = static_cast<float>(redWins) / Games;
+  EXPECT_NEAR(0.5f, redWinProportion, 0.05f);
+}
+
+TEST(NoTippingGames, RandomVsMinimax)
+{
+  enum { Games = 5, };
+  int redWins;
+  PlayerBattle<RandomPlayer, MinimaxPlayer, Games>::Play(&redWins);
   std::cout << "Red won " << redWins << " times out of "
             << Games << " games." << std::endl;
   const float redWinProportion = static_cast<float>(redWins) / Games;
   EXPECT_NEAR(0.0f, redWinProportion, 0.01f);
 }
 
-TEST(AlphaBetaPruningVsRandom, NoTippingGames)
+TEST(NoTippingGames, DISABLED_MinimaxVsRandom)
 {
-  enum { Games = 100, };
+  enum { Games = 5, };
   int redWins;
-  PlayerBattle<AlphaBetaPruningPlayer,
-               RandomPlayer,
-               Games>::Play(&redWins,
-                            AlphaBetaPruningDepthHeuristics(),
-                            NoHeuristic());
+  PlayerBattle<MinimaxPlayer, RandomPlayer, Games>::Play(&redWins);
   std::cout << "Red won " << redWins << " times out of "
             << Games << " games." << std::endl;
   const float redWinProportion = static_cast<float>(redWins) / Games;
   EXPECT_NEAR(1.0f, redWinProportion, 0.01f);
 }
 
-//TEST(MinimaxVsMinimax, NoTippingGames)
-//{
-//  enum { Games = 10, };
-//  int redWins;
-//  PlayerBattle<MinimaxPlayer, MinimaxPlayer, Games>::Play(&redWins);
-//  std::cout << "Red won " << redWins << " times out of "
-//            << Games << " games." << std::endl;
-//  const float redWinProportion = static_cast<float>(redWins) / Games;
-//  EXPECT_NEAR(1.0f, redWinProportion, 0.01f);
-//}
+TEST(NoTippingGames, RandomVsAlphaBetaPruning)
+{
+  enum { Games = 100, };
+  int redWins;
+  PlayerBattle<RandomPlayer, AlphaBetaPruningPlayer, Games>::Play(&redWins);
+  std::cout << "Red won " << redWins << " times out of "
+            << Games << " games." << std::endl;
+  const float redWinProportion = static_cast<float>(redWins) / Games;
+  EXPECT_NEAR(0.0f, redWinProportion, 0.01f);
+}
 
-//TEST(MinimaxVsMonteCarlo, NoTippingGames)
-//{
-//  enum { Games = 10, };
-//  int redWins;
-//  PlayerBattle<MinimaxPlayer, MonteCarloPlayer, Games>::Play(&redWins);
-//  std::cout << "Red won " << redWins << " times out of "
-//            << Games << " games." << std::endl;
-//  const float redWinProportion = static_cast<float>(redWins) / Games;
-//  EXPECT_NEAR(1.0f, redWinProportion, 0.01f);
-//}
+TEST(NoTippingGames, AlphaBetaPruningVsRandom)
+{
+  enum { Games = 100, };
+  int redWins;
+  PlayerBattle<AlphaBetaPruningPlayer, RandomPlayer, Games>::Play(&redWins);
+  std::cout << "Red won " << redWins << " times out of "
+            << Games << " games." << std::endl;
+  const float redWinProportion = static_cast<float>(redWins) / Games;
+  EXPECT_NEAR(1.0f, redWinProportion, 0.01f);
+}
+
+TEST(NoTippingGames, DISABLED_MinimaxVsMinimax)
+{
+  enum { Games = 2, };
+  int redWins;
+  PlayerBattle<MinimaxPlayer, MinimaxPlayer, Games>::Play(&redWins);
+  std::cout << "Red won " << redWins << " times out of "
+            << Games << " games." << std::endl;
+  const float redWinProportion = static_cast<float>(redWins) / Games;
+  EXPECT_NEAR(1.0f, redWinProportion, 0.01f);
+}
+
+TEST(NoTippingGames, DISABLED_RandomVsMonteCarlo)
+{
+  enum { Games = 100, };
+  int redWins;
+  PlayerBattle<RandomPlayer, MonteCarloPlayer, Games>::Play(&redWins);
+  std::cout << "Red won " << redWins << " times out of "
+            << Games << " games." << std::endl;
+  const float redWinProportion = static_cast<float>(redWins) / Games;
+  EXPECT_NEAR(1.0f, redWinProportion, 0.01f);
+}
+
+TEST(NoTippingGames, DISABLED_MinimaxVsMonteCarlo)
+{
+  enum { Games = 10, };
+  int redWins;
+  PlayerBattle<MinimaxPlayer, MonteCarloPlayer, Games>::Play(&redWins);
+  std::cout << "Red won " << redWins << " times out of "
+            << Games << " games." << std::endl;
+  const float redWinProportion = static_cast<float>(redWins) / Games;
+  EXPECT_NEAR(1.0f, redWinProportion, 0.01f);
+}
 
 }
 

@@ -348,7 +348,7 @@ inline void HashPosWeight(const int p, const int w, unsigned int* h)
 }
 }
 
-unsigned int HashBoardCRC(const Board& board)
+inline unsigned int HashBoardCRC(const Board& board)
 {
   // reissb -- 20111009 -- Taken from
   //   http://www.cs.hmc.edu/~geoff/classes/hmc.cs070.200101/
@@ -365,8 +365,8 @@ unsigned int HashBoardCRC(const Board& board)
   return h;
 }
 
-unsigned int HashPosWeightPairsCRC(const int count,
-                                   const std::pair<int, int>* posWeightPairs)
+inline unsigned int HashPosWeightPairsCRC(const int count,
+                                          const std::pair<int, int>* posWeightPairs)
 {
   // reissb -- 20111009 -- Taken from
   //   http://www.cs.hmc.edu/~geoff/classes/hmc.cs070.200101/

@@ -1,6 +1,6 @@
 #ifndef _NO_TIPPING_GAME_MINIMAX_H_
 #define _NO_TIPPING_GAME_MINIMAX_H_
-#include "no_tipping_game.h"
+#include "ntg.h"
 #include <omp.h>
 
 namespace hps

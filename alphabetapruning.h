@@ -1,6 +1,6 @@
 #ifndef _NO_TIPPING_GAME_ALPHABETAPRUNING_H_
 #define _NO_TIPPING_GAME_ALPHABETAPRUNING_H_
-#include "no_tipping_game.h"
+#include "ntg.h"
 #include <omp.h>
 
 namespace hps
@@ -19,7 +19,8 @@ struct AlphaBetaPruning
         maxDepth(-1),
         bestMinimax(0),
         bestPlyIdx(-1),
-        dfsPlys(State::NumRemoved + (2 * Player::NumWeights) - 2)
+        dfsPlys(State::NumRemoved + (2 * Player::NumWeights) - 2),
+        victoryIsMine(NULL)
     {}
 
     State state;
@@ -28,6 +29,7 @@ struct AlphaBetaPruning
     int bestMinimax;
     int bestPlyIdx;
     std::vector<std::vector<Ply> > dfsPlys;
+    volatile bool* victoryIsMine;
   };
 
   /// <summary> The parallel minimax parameters. </summary>
@@ -70,8 +72,8 @@ struct AlphaBetaPruning
     int& depth = params->depth;
     assert(maxDepth > 1);
     assert(depth < maxDepth);
-    std::cout << "AlphaBetaPruning::Run() : maxDepth = " << maxDepth
-              << "." << std::endl;
+//    std::cout << "AlphaBetaPruning::Run() : maxDepth = " << maxDepth
+//              << "." << std::endl;
     ++depth;
 
     // Get the children of the current state.
@@ -80,6 +82,7 @@ struct AlphaBetaPruning
     PossiblePlys(*state, &plys);
     std::sort(plys.begin(), plys.end(), PlyTorqueComp(state));
     // A leaf has no non-suicidal moves. Who won?
+    volatile bool victoryIsMine = false;
     int minimax;
     if (plys.empty())
     {
@@ -102,6 +105,7 @@ struct AlphaBetaPruning
             threadParams.depth = depth;
             threadParams.maxDepth = maxDepth;
             threadParams.state = *state;
+            threadParams.victoryIsMine = &victoryIsMine;
           }
         }
       }
@@ -114,19 +118,29 @@ struct AlphaBetaPruning
       {
         const int threadIdx = omp_get_thread_num();
         ThreadParams& threadParams = threadData[threadIdx];
-        // Apply the ply for this state.
-        Ply& mkChildPly = plys[plyIdx];
-        DoPly(mkChildPly, &threadParams.state);
-        // Run on the subtree.
-        const int minimax = RunThread(alpha, beta, &threadParams, evalFunc);
-        // Undo the ply for the next worker.
-        UndoPly(mkChildPly, &threadParams.state);
-        // Collect best minimax for this thread.
-        if ((-1 == threadParams.bestPlyIdx) ||
-            (minimax > threadParams.bestMinimax))
+        if (!victoryIsMine)
         {
-          threadParams.bestMinimax = minimax;
-          threadParams.bestPlyIdx = plyIdx;
+          // Apply the ply for this state.
+          Ply& mkChildPly = plys[plyIdx];
+          DoPly(mkChildPly, &threadParams.state);
+          // Run on the subtree.
+          const int minimax = RunThread(alpha, beta, &threadParams, evalFunc);
+          // Undo the ply for the next worker.
+          UndoPly(mkChildPly, &threadParams.state);
+          // Collect best minimax for this thread.
+          if ((-1 == threadParams.bestPlyIdx) ||
+              (minimax > threadParams.bestMinimax))
+          {
+            threadParams.bestMinimax = minimax;
+            threadParams.bestPlyIdx = plyIdx;
+            if (std::numeric_limits<int>::max() == minimax)
+            {
+              std::cout << "Thread " << threadIdx << " found victoryIsMine on "
+                        << "ply " << plyIdx << " of " << plys.size()
+                        << "." << std::endl;
+              victoryIsMine = true;
+            }
+          }
         }
       }
       // Gather best result from all threads.
@@ -142,7 +156,7 @@ struct AlphaBetaPruning
     --depth;
     if (std::numeric_limits<int>::min() == minimax)
     {
-      std::cout << "No guaranteed victory." << std::endl;
+//      std::cout << "No guaranteed victory." << std::endl;
       // Select ply based on heuristic.
       DoPly(plys.front(), state);
       int bestPlyScore = (*evalFunc)(*state);
@@ -240,6 +254,7 @@ private:
     assert(params && evalFunc);
 
     State* state = &params->state;
+    volatile bool* victoryIsMine = params->victoryIsMine;
     // Score all plys to find minimax.
     MinimaxFunc minimaxFunc;
     for (; testPly != endPly; ++testPly)
@@ -253,6 +268,12 @@ private:
       UndoPly(*testPly, state);
       if (*alpha >= *beta)
       {
+        break;
+      }
+      if (*victoryIsMine)
+      {
+        //std::cout << "Got victory signal." << std::endl;
+        *minimax = 0;
         break;
       }
     }

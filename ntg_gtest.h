@@ -1,16 +1,17 @@
 #ifndef _NO_TIPPING_GAME_NTG_GTEST_H_
 #define _NO_TIPPING_GAME_NTG_GTEST_H_
-#include "no_tipping_game.h"
+#include "ntg.h"
+#include "adversarial_utils.h"
 #include "ntg_gtest_operators.h"
 #include "ntg_gtest_utils.h"
-#include "rand_bound_generator.h"
+#include "rand_bound.h"
 #include "gtest/gtest.h"
 
 namespace _no_tipping_game_ntg_gtest_h_
 {
 using namespace hps;
 
-TEST(Board, NoTippingComponents)
+TEST(ntg, Board)
 {
   // Board iterators.
   {
@@ -24,7 +25,7 @@ TEST(Board, NoTippingComponents)
   {
     SCOPED_TRACE("Accessors and mutators");
     enum { BoardTestSize = 50, };
-    typedef detail::GenericBoard<0, 0, 0, BoardTestSize> TestBoard;
+    typedef ntg::detail::GenericBoard<0, 0, 0, BoardTestSize> TestBoard;
     TestBoard board;
     const size_t boardPositions = sizeof(board.positions) /
                                   sizeof(board.positions[0]);
@@ -78,7 +79,7 @@ TEST(Board, NoTippingComponents)
   }
 }
 
-TEST(Player, NoTippingComponents)
+TEST(ntg, Player)
 {
   // Default player.
   {
@@ -95,7 +96,7 @@ TEST(Player, NoTippingComponents)
   }
 }
 
-TEST(State, NoTippingComponents)
+TEST(ntg, State)
 {
   // Default state.
   std::cout << "State::MaxPlys " << State::MaxPlys << "." << std::endl;
@@ -251,7 +252,7 @@ TEST(State, NoTippingComponents)
   }
 }
 
-TEST(PlysExhaustive, NoTippingComponents)
+TEST(ntg, PlysExhaustive)
 {
   {
     State state;
@@ -280,7 +281,7 @@ TEST(PlysExhaustive, NoTippingComponents)
   }
 }
 
-TEST(Torque, NoTippingComponents)
+TEST(ntg, Torque)
 {
   // Default board.
   {
@@ -299,31 +300,31 @@ TEST(Torque, NoTippingComponents)
   {
     enum { BoardTestSize = 200, };
     enum { TestMaxWeight = 200, };
-    typedef detail::GenericBoard<0, 0, 0, BoardTestSize> BoardTest;
-    const RandBoundedGenerator randWeightGen(TestMaxWeight);
-    const RandBoundedGenerator randPosGen(BoardTestSize);
+    typedef ntg::detail::GenericBoard<0, 0, 0, BoardTestSize> BoardTest;
+    const RandBoundGenerator randWeightGen(TestMaxWeight);
+    const RandBoundGenerator randPosGen(BoardTestSize);
     for (size_t trial = 0; trial < 1000; ++trial)
     {
       const Weight randW = randWeightGen() + 1;
       BoardTest board;
       assert(0 == BoardTest::PivotL);
       assert(0 == BoardTest::PivotR);
-      detail::ClearBoard(&board);
+      ntg::detail::ClearBoard(&board);
       const int pos = randPosGen() - BoardTest::Size;
       // Place the weight.
       board[pos] = randW;
-      const int torque = detail::Torque<0>(board);
+      const int torque = ntg::detail::Torque<0>(board);
       EXPECT_EQ(-pos * randW, torque);
       if (0 != pos)
       {
-        const bool tipped = detail::Tipped(board);
+        const bool tipped = ntg::detail::Tipped(board);
         EXPECT_TRUE(tipped);
       }
     }
   }
 }
 
-TEST(AddingPhasePlys, NoTippingComponents)
+TEST(ntg, AddingPhasePlys)
 {
   // Verify plys.
   {
@@ -373,7 +374,7 @@ TEST(AddingPhasePlys, NoTippingComponents)
   }
 }
 
-TEST(RemovingPhasePlys, NoTippingComponents)
+TEST(ntg, RemovingPhasePlys)
 {
   // Verify plys.
   {
@@ -409,6 +410,57 @@ TEST(RemovingPhasePlys, NoTippingComponents)
     }
   }
 }
+
+TEST(adversarial_utils, WinStates)
+{
+  State state;
+  InitState(&state);
+  // Count states where blue wins.
+  {
+    std::vector<Board> oneW;
+    const int numWinStates = SingleWeightStatesNoConflict(state.board, &oneW);
+    std::cout << "Blue wins from " << numWinStates << " possible states "
+              << "since Red cannot remove a weight." << std::endl;
+    for (int boardIdx = 0; boardIdx < numWinStates; ++boardIdx)
+    {
+      const Board& board = oneW[boardIdx];
+      EXPECT_FALSE(Tipped(board));
+      int weights = 0;
+      for (Board::const_iterator w = board.begin(); w != board.end(); ++w)
+      {
+        weights += (*w != Board::Empty);
+      }
+      EXPECT_EQ(1, weights);
+    }
+  }
+  // Count states where red wins.
+  {
+    std::vector<Board> twoW;
+    const int numWinStates = DoubleWeightStatesNoConflictNoRemove(state.board,
+                                                                  &twoW);
+    std::cout << "Red wins from " << numWinStates << " possible states "
+              << "since blue cannot remove a weight." << std::endl;
+    Weight tmpW = Board::Empty;
+    for (int boardIdx = 0; boardIdx < numWinStates; ++boardIdx)
+    {
+      Board& board = twoW[boardIdx];
+      EXPECT_FALSE(Tipped(board));
+      int weights = 0;
+      for (Board::iterator w = board.begin(); w != board.end(); ++w)
+      {
+        if (*w != Board::Empty)
+        {
+          ++weights;
+          std::swap(tmpW, *w);
+          EXPECT_TRUE(Tipped(board));
+          std::swap(tmpW, *w);
+        }
+      }
+      EXPECT_EQ(2, weights);
+    }
+  }
+}
+
 
 }
 

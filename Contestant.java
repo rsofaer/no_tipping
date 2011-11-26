@@ -30,7 +30,12 @@ class Contestant extends NoTippingPlayer
         System.out.println(s);
         ntgCppOut.write(s + "\n");
       }
-      ntgCppOut.flush();
+      // The parent framework removes STATE END.
+      {
+        String s = "STATE END";
+        System.out.println(s);
+        ntgCppOut.write(s + "\n");
+      }
       // Read response.
       System.out.println("Reading move...");
       move = ntgCppIn.readLine().trim();

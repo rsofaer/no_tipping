@@ -204,7 +204,7 @@ inline const Player* CurrentPlayer(const State* state)
 }
 
 /// <summary> Initialize player to game defaults. </summary>
-void InitPlayer(Player* player)
+inline void InitPlayer(Player* player)
 {
   player->remain = Player::NumWeights;
   for (int wIdx = 0; wIdx < Player::NumWeights; ++wIdx)
@@ -549,7 +549,7 @@ inline void UndoPly(const Ply& ply, State* state)
 }
 
 /// <summary> Function to assist in choosing a losing move. </summary>
-void AnyPlyWillDo(State* state, Ply* ply)
+inline void AnyPlyWillDo(State* state, Ply* ply)
 {
   assert(state);
   // Find open board space.

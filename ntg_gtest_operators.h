@@ -1,6 +1,6 @@
 #ifndef _NO_TIPPING_GAME_NTG_GTEST_OPERATORS_H_
 #define _NO_TIPPING_GAME_NTG_GTEST_OPERATORS_H_
-#include "no_tipping_game.h"
+#include "ntg.h"
 
 namespace hps
 {

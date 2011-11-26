@@ -1,10 +1,10 @@
 #ifndef _NO_TIPPING_GAME_NTG_PLAYERS_H_
 #define _NO_TIPPING_GAME_NTG_PLAYERS_H_
-#include "minimax.h"
 #include "alphabetapruning.h"
+#include "minimax.h"
 #include "adversarial_utils.h"
-#include "no_tipping_game.h"
-#include "rand_bound_generator.h"
+#include "ntg.h"
+#include "rand_bound.h"
 
 namespace hps
 {
@@ -44,6 +44,61 @@ struct RandomPlayer
 
 struct MinimaxPlayer
 {
+  /// <summary> Modify depth to achieve max performance. </summary>
+  struct MinimaxDepthHeuristics
+  {
+    inline static void Apply(const int turns,
+                             const State& state,
+                             MinimaxPlayer* player)
+    {
+      assert(player);
+
+      // Update win states when phase is changing.
+      if ((turns > State::NumAdded) && (turns <= (State::NumAdded + 2)))
+      {
+        assert(State::Phase_Removing == state.phase);
+        player->evalFunc.Update(state, 3, 7);
+      }
+      // Select minimax depth based on moves.
+      if (turns > (State::NumAdded + 4))
+      {
+        player->params.maxDepthRemoving += 2;
+      }
+      else if (turns > (State::NumAdded + 2))
+      {
+        ++player->params.maxDepthRemoving;
+      }
+      else if (turns > State::NumAdded)
+      {
+  #if NDEBUG
+        player->params.maxDepthRemoving = 4;
+  #else
+        player->params.maxDepthRemoving = 3;
+  #endif
+      }
+      else if (turns >= 17)
+      {
+  #if NDEBUG
+        player->params.maxDepthAdding = 4;
+  #endif
+      }
+      else
+      {
+  #if NDEBUG
+        player->params.maxDepthAdding = 3;
+  #else
+        player->params.maxDepthAdding = 2;
+  #endif
+      }
+  //    std::cout << "player->params.maxDepthAdding = "
+  //              << player->params.maxDepthAdding
+  //              << "." << std::endl;
+  //    std::cout << "player->params.maxDepthRemoving = "
+  //              << player->params.maxDepthRemoving
+  //              << "." << std::endl;
+    }
+  };
+
   MinimaxPlayer(const State::Turn who_)
     : who(who_),
       params(),
@@ -66,6 +121,20 @@ struct MinimaxPlayer
     assert(ply);
     assert(!Tipped(state->board));
 
+    // Optimize parameters.
+    if (State::Phase_Adding == state->phase)
+    {
+      const int turns = State::NumAdded -
+                        (state->red.remain + state->blue.remain);
+      MinimaxDepthHeuristics::Apply(turns + 1, *state, this);
+    }
+    else
+    {
+      const int turns = State::NumAdded +
+                        abs(state->red.remain + state->blue.remain);
+      MinimaxDepthHeuristics::Apply(turns + 1, *state, this);
+    }
+
     // Get the minimax move.
     Minimax::Run(&params, state, &evalFunc, ply);
     assert(ply->pos >= -Board::Size);
@@ -79,6 +148,72 @@ struct MinimaxPlayer
 
 struct AlphaBetaPruningPlayer
 {
+  /// <summary> Modify depth to achieve max performance. </summary>
+  struct AlphaBetaPruningDepthHeuristics
+  {
+    inline static void Apply(const int turns,
+                             const State& state,
+                             AlphaBetaPruningPlayer* player)
+    {
+      assert(player);
+
+      // Update win states when phase is changing.
+      //if ((turns > State::NumAdded) && (turns <= (State::NumAdded + 2)))
+      if ((turns > (State::NumAdded + 0)) && (turns <= (State::NumAdded + 2)))
+      {
+        //assert(State::Phase_Removing == state.phase);
+        player->evalFunc.Update(state, 1, 5);
+//        std::cout << "Red win states: "
+//                  << player->evalFunc.totalRedWinStates
+//                  << ", Blue win states: "
+//                  << player->evalFunc.totalBlueWinStates << std::endl;
+      }
+      // Select minimax depth based on moves.
+      if (turns > (State::NumAdded + 2))
+      {
+  #if NDEBUG
+        player->params.maxDepthRemoving = State::MaxPlys;
+  #else
+        player->params.maxDepthRemoving = 4;
+  #endif
+      }
+      else if (turns > State::NumAdded)
+      {
+  #if NDEBUG
+        player->params.maxDepthRemoving = 7;
+  #else
+        player->params.maxDepthRemoving = 3;
+  #endif
+      }
+      else if (turns > 16)
+      {
+  #if NDEBUG
+        player->evalFunc.Update(state, 3, 5);
+        player->params.maxDepthAdding = 4;
+  #else
+        player->evalFunc.Update(state, 3, 5);
+        player->params.maxDepthAdding = 2;
+  #endif
+      }
+      else
+      {
+  #if NDEBUG
+        player->evalFunc.Update(state, 3, 7);
+        player->params.maxDepthAdding = 4;
+  #else
+        player->evalFunc.Update(state, 3, 5);
+        player->params.maxDepthAdding = 2;
+  #endif
+      }
+  //    std::cout << "player->params.maxDepthAdding = "
+  //              << player->params.maxDepthAdding
+  //              << "." << std::endl;
+  //    std::cout << "player->params.maxDepthRemoving = "
+  //              << player->params.maxDepthRemoving
+  //              << "." << std::endl;
+    }
+  };
+
   AlphaBetaPruningPlayer(const State::Turn who_)
     : who(who_),
       params(),
@@ -101,6 +236,20 @@ struct AlphaBetaPruningPlayer
     assert(ply);
     assert(!Tipped(state->board));
 
+    // Optimize parameters.
+    if (State::Phase_Adding == state->phase)
+    {
+      const int turns = State::NumAdded -
+                        (state->red.remain + state->blue.remain);
+      AlphaBetaPruningDepthHeuristics::Apply(turns + 1, *state, this);
+    }
+    else
+    {
+      const int turns = State::NumAdded +
+                        abs(state->red.remain + state->blue.remain);
+      AlphaBetaPruningDepthHeuristics::Apply(turns + 1, *state, this);
+    }
+
     // Get the minimax move.
     AlphaBetaPruning::Run(&params, state, &evalFunc, ply);
     assert(ply->pos >= -Board::Size);
@@ -114,6 +263,14 @@ struct AlphaBetaPruningPlayer
 
 struct MonteCarloPlayer
 {
+  struct PlyLtOp
+  {
+    inline bool operator()(const Ply& lhs, const Ply& rhs) const
+    {
+      return (lhs.pos < rhs.pos) && (lhs.wIdx < rhs.wIdx);
+    }
+  };
+
   MonteCarloPlayer(const State::Turn who_) : who(who_), plyCountMap() {}
 
   /// <summary> Return next ply without mutating the state. </summary>
@@ -174,7 +331,7 @@ struct MonteCarloPlayer
 
   State::Turn who;
 
-  typedef std::map<Ply, int> PlyCountMap;
+  typedef std::map<Ply, int, PlyLtOp> PlyCountMap;
   PlyCountMap plyCountMap;
 };
 
