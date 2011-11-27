@@ -162,7 +162,7 @@ struct AlphaBetaPruningPlayer
       if ((turns > (State::NumAdded + 0)) && (turns <= (State::NumAdded + 2)))
       {
         //assert(State::Phase_Removing == state.phase);
-        player->evalFunc.Update(state, 1, 5);
+        player->evalFunc.Update(state, 1, 7);
 //        std::cout << "Red win states: "
 //                  << player->evalFunc.totalRedWinStates
 //                  << ", Blue win states: "
@@ -180,7 +180,7 @@ struct AlphaBetaPruningPlayer
       else if (turns > State::NumAdded)
       {
   #if NDEBUG
-        player->params.maxDepthRemoving = 7;
+        player->params.maxDepthRemoving = 6;
   #else
         player->params.maxDepthRemoving = 3;
   #endif
@@ -188,8 +188,8 @@ struct AlphaBetaPruningPlayer
       else if (turns > 16)
       {
   #if NDEBUG
-        player->evalFunc.Update(state, 3, 5);
-        player->params.maxDepthAdding = 4;
+        player->evalFunc.Update(state, 3, 7);
+        player->params.maxDepthAdding = 5;
   #else
         player->evalFunc.Update(state, 3, 5);
         player->params.maxDepthAdding = 2;
