@@ -113,7 +113,7 @@ struct AlphaBetaPruning
       const int alpha = std::numeric_limits<int>::min();
       const int beta = std::numeric_limits<int>::max();
       // Parallelize the first level.
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic, 1)
       for (int plyIdx = 0; plyIdx < static_cast<int>(plys.size()); ++plyIdx)
       {
         const int threadIdx = omp_get_thread_num();
@@ -259,6 +259,12 @@ private:
     MinimaxFunc minimaxFunc;
     for (; testPly != endPly; ++testPly)
     {
+      if (*victoryIsMine)
+      {
+        //std::cout << "Got victory signal." << std::endl;
+        *minimax = 0;
+        break;
+      }
       DoPly(*testPly, state);
       int score = RunThread(*alpha, *beta, params, evalFunc);
       if (minimaxFunc(score, *minimax))
@@ -268,12 +274,6 @@ private:
       UndoPly(*testPly, state);
       if (*alpha >= *beta)
       {
-        break;
-      }
-      if (*victoryIsMine)
-      {
-        //std::cout << "Got victory signal." << std::endl;
-        *minimax = 0;
         break;
       }
     }
